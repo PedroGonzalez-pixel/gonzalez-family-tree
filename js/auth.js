@@ -1,6 +1,6 @@
-/****************************************************
- * AUTHENTIFICATION GOOGLE (Firebase v8)
- ****************************************************/
+//****************************************************
+//* AUTHENTIFICATION GOOGLE (Firebase v8)
+//****************************************************/
 
 // Fournisseur Google
 const provider = new firebase.auth.GoogleAuthProvider();
