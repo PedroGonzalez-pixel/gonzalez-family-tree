@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Arbre Généalogique</title>
+  <link rel="stylesheet" href="css/style.css">
+  https://unpkg.com/vis-network/standalone/umd/vis-network.min.js
+  <script src="js/firebase-init.js" defer></script>
+  <script src="js/auth.js" defer></script>
+  <script src="js/tree.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>Arbre Généalogique</h1>
+    <button onclick="firebase.auth().signOut()" class="btn">Déconnexion</button>
+  </header>
+  <div id="tree" style="height:90vh; margin:20px;"></div>
+</body>
+</html>
