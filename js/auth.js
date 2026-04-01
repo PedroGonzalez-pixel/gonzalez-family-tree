@@ -1,4 +1,4 @@
-//****************************************************
+/****************************************************
  * AUTHENTIFICATION GOOGLE (Firebase v8)
  ****************************************************/
 
@@ -10,9 +10,9 @@ const loginBtn = document.getElementById("googleLogin");
 
 if (loginBtn) {
   loginBtn.addEventListener("click", () => {
-    auth.signInWithPopup(provider)
+    firebase.auth().signInWithPopup(provider)
       .then(() => {
-        // Redirection vers le dashboard une fois connecté
+        // Redirection vers dashboard
         window.location.href = "dashboard.html";
       })
       .catch(err => alert("Erreur connexion Google : " + err.message));
@@ -20,11 +20,10 @@ if (loginBtn) {
 }
 
 /****************************************************
- * PROTECTION DES PAGES : accès réservé aux connectés
+ * PROTECTION DES PAGES
  ****************************************************/
 firebase.auth().onAuthStateChanged(user => {
 
-  // Liste des pages protégées
   const protectedPages = [
     "dashboard.html",
     "tree.html",
@@ -34,12 +33,9 @@ firebase.auth().onAuthStateChanged(user => {
     "timeline.html"
   ];
 
-  // Page actuelle
   const current = location.pathname.split("/").pop();
 
-  // Si l'utilisateur n'est pas connecté → retour au login
   if (!user && protectedPages.includes(current)) {
     window.location.href = "index.html";
   }
 });
-``
