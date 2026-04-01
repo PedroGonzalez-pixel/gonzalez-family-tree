@@ -1,6 +1,6 @@
-/****************************************************
- * Initialisation Firebase (compatibilité version 8)
- ****************************************************/
+//****************************************************
+// * Initialisation Firebase (compatibilité version 8)
+ //****************************************************/
 
 // Configuration de ton projet Firebase
 const firebaseConfig = {
