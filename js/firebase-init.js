@@ -1,4 +1,8 @@
-// Firebase configuration générée automatiquement
+/****************************************************
+ * Initialisation Firebase (compatibilité version 8)
+ ****************************************************/
+
+// Configuration de ton projet Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyAKRVr5f82dRqBAGTbfePCxIidUtaRKhHo",
   authDomain: "gonzalezfamilytree-657b9.firebaseapp.com",
@@ -8,8 +12,10 @@ const firebaseConfig = {
   appId: "1:400439887654:web:b45c1ea099aca1a14b23e7"
 };
 
-// Initialiser Firebase
-const app = firebase.initializeApp(firebaseConfig);
+// Initialisation Firebase (VERSION 8 — nécessaire pour ton projet)
+firebase.initializeApp(firebaseConfig);
+
+// Services Firebase utilisés dans ton site
 const auth = firebase.auth();
 const db = firebase.firestore();
 const storage = firebase.storage();
