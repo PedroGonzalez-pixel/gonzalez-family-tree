@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/firebase-init.js" defer></script>
+  <script src="js/auth.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>Famille Gonzalez</h1>
+    <button onclick="firebase.auth().signOut()" class="btn">Déconnexion</button>
+  </header>
+
+  <main class="grid">
+    <a href="tree.html" class="card">🌳 Arbre Généalogique</a>
+    <a href="gallery.html" class="card">📸 Galerie</a>
+    <a href="timeline.html" class="card">🕒 Frise Historique</a>
+    <a href="edit.html" class="card">➕ Ajouter une personne</a>
+  </main>
+</body>
+</html>
