@@ -1,39 +1,42 @@
-/ ✅ LISTE BLANCHE — ajoute ici les emails autorisés
-const authorizedEmails = [
-  "jean.pierre.gonzalez@gmail.com",
-  "membre2@gmail.com",
-  "membre3@gmail.com"
-  // Ajoute autant d'emails que nécessaire
-];
- 
 // Fournisseur Google
 const provider = new firebase.auth.GoogleAuthProvider();
- 
+
+// Vérifie si l'email est autorisé dans Firestore
+async function checkAuthorized(email) {
+  try {
+    const doc = await db.collection("authorizedUsers").doc(email).get();
+    return doc.exists;
+  } catch (e) {
+    return false;
+  }
+}
+
 // Bouton de connexion Google
 const loginBtn = document.getElementById("googleLogin");
 if (loginBtn) {
-  loginBtn.addEventListener("click", () => {
-    firebase.auth().signInWithPopup(provider)
-      .then(result => {
-        const email = result.user.email;
- 
-        // Vérification de l'email
-        if (!authorizedEmails.includes(email)) {
-          // Email non autorisé → déconnexion immédiate
-          firebase.auth().signOut();
-          alert("⛔ Accès refusé.\nCe compte Google (" + email + ") n'est pas autorisé.\nContacte l'administrateur du site.");
-          return;
-        }
- 
-        // Email autorisé → redirection
-        window.location.href = "dashboard.html";
-      })
-      .catch(err => alert("Erreur connexion Google : " + err.message));
+  loginBtn.addEventListener("click", async () => {
+    try {
+      const result = await firebase.auth().signInWithPopup(provider);
+      const email = result.user.email;
+
+      const authorized = await checkAuthorized(email);
+
+      if (!authorized) {
+        await firebase.auth().signOut();
+        alert("⛔ Accès refusé.\n" + email + " n'est pas autorisé.\nContacte l'administrateur.");
+        return;
+      }
+
+      window.location.href = "dashboard.html";
+
+    } catch (err) {
+      alert("Erreur connexion : " + err.message);
+    }
   });
 }
- 
+
 // Protection des pages internes
-firebase.auth().onAuthStateChanged(user => {
+firebase.auth().onAuthStateChanged(async user => {
   const protectedPages = [
     "dashboard.html",
     "tree.html",
@@ -43,17 +46,18 @@ firebase.auth().onAuthStateChanged(user => {
     "timeline.html"
   ];
   const current = location.pathname.split("/").pop();
- 
+
   if (!user && protectedPages.includes(current)) {
     window.location.href = "index.html";
+    return;
   }
- 
+
   // Double vérification sur les pages protégées
   if (user && protectedPages.includes(current)) {
-    if (!authorizedEmails.includes(user.email)) {
-      firebase.auth().signOut();
+    const authorized = await checkAuthorized(user.email);
+    if (!authorized) {
+      await firebase.auth().signOut();
       window.location.href = "index.html";
     }
   }
 });
- 
