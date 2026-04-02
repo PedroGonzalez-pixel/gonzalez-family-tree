@@ -1,4 +1,8 @@
+console.log("auth.js chargé ✅");
+console.log("Firebase auth:", typeof firebase !== 'undefined' ? "OK" : "NON CHARGÉ ❌");
 
+const loginBtn = document.getElementById("googleLogin");
+console.log("Bouton trouvé:", loginBtn ? "OUI ✅" : "NON ❌");
 
 // Fournisseur Google
 const provider = new firebase.auth.GoogleAuthProvider();
