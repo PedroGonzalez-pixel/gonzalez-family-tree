@@ -1,6 +1,3 @@
-// Email administrateur — affiche le bouton Modifier uniquement pour lui
-const ADMIN_EMAIL = "TON_EMAIL@gmail.com"; // ← Remplace par ton email
-
 const urlParams = new URLSearchParams(window.location.search);
 const personId = urlParams.get("id");
 
@@ -8,11 +5,23 @@ if (!personId) {
   window.location.href = "dashboard.html";
 }
 
+// Vérifie si l'utilisateur est admin dans Firestore
+async function checkAdmin(email) {
+  try {
+    const doc = await db.collection("authorizedUsers").doc(email).get();
+    if (!doc.exists) return false;
+    return doc.data().role === "admin";
+  } catch (e) {
+    return false;
+  }
+}
+
 firebase.auth().onAuthStateChanged(async function(user) {
   if (!user) return;
 
-  // Affiche le bouton modifier pour l'admin
-  if (user.email === ADMIN_EMAIL) {
+  const isAdmin = await checkAdmin(user.email);
+
+  if (isAdmin) {
     const editLink = document.getElementById("editLink");
     editLink.href = "edit.html?id=" + personId;
     editLink.style.display = "inline-block";
@@ -32,18 +41,15 @@ async function loadPerson(id) {
 
     const p = doc.data();
 
-    // Nom complet
     const fullName = (p.firstName || "") + " " + (p.lastName || "");
     document.getElementById("fullName").textContent = fullName;
     document.getElementById("personName").textContent = fullName;
 
-    // Dates
     let dates = "";
     if (p.birthDate) dates += "Né(e) le " + formatDate(p.birthDate);
     if (p.deathDate) dates += " — Décédé(e) le " + formatDate(p.deathDate);
     document.getElementById("dates").textContent = dates || "Dates inconnues";
 
-    // Photo
     if (p.photoURL) {
       const photo = document.getElementById("personPhoto");
       photo.style.backgroundImage = "url(" + p.photoURL + ")";
@@ -52,15 +58,12 @@ async function loadPerson(id) {
       photo.textContent = "";
     }
 
-    // Notes
     document.getElementById("personNotes").textContent = p.notes || "Aucune note.";
 
-    // Relations
     if (p.fatherId) await loadRelation("fatherLink", p.fatherId);
     if (p.motherId) await loadRelation("motherLink", p.motherId);
     if (p.spouseId) await loadRelation("spouseLink", p.spouseId);
 
-    // Enfants
     await loadChildren(id);
 
   } catch (err) {
@@ -82,11 +85,9 @@ async function loadRelation(elementId, relatedId) {
 async function loadChildren(parentId) {
   try {
     const snapshot = await db.collection("persons")
-      .where("fatherId", "==", parentId)
-      .get();
+      .where("fatherId", "==", parentId).get();
     const snapshot2 = await db.collection("persons")
-      .where("motherId", "==", parentId)
-      .get();
+      .where("motherId", "==", parentId).get();
 
     const children = {};
     snapshot.forEach(doc => children[doc.id] = doc.data());
