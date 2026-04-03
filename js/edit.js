@@ -4,7 +4,6 @@ const personId = urlParams.get("id");
 let photoFile = null;
 let isAdmin = false;
 
-// Vérifie si l'utilisateur est admin dans Firestore
 async function checkAdmin(email) {
   try {
     const doc = await db.collection("authorizedUsers").doc(email).get();
@@ -15,7 +14,6 @@ async function checkAdmin(email) {
   }
 }
 
-// Chargement initial
 firebase.auth().onAuthStateChanged(async function(user) {
   if (!user) return;
 
@@ -30,17 +28,14 @@ firebase.auth().onAuthStateChanged(async function(user) {
   await loadAllPersons();
 
   if (personId) {
-    document.getElementById("pageTitle").textContent = "Modifier une personne";
     document.getElementById("deleteBtn").style.display = "inline-block";
     await loadPerson(personId);
   }
 });
 
-// Charge toutes les personnes dans les selects
 async function loadAllPersons() {
   const snapshot = await db.collection("persons").orderBy("lastName").get();
   const selects = ["fatherId", "motherId", "spouseId"];
-
   snapshot.forEach(doc => {
     if (doc.id === personId) return;
     const p = doc.data();
@@ -53,7 +48,6 @@ async function loadAllPersons() {
   });
 }
 
-// Charge une personne existante dans le formulaire
 async function loadPerson(id) {
   const doc = await db.collection("persons").doc(id).get();
   if (!doc.exists) return;
@@ -61,6 +55,7 @@ async function loadPerson(id) {
 
   document.getElementById("firstName").value = p.firstName || "";
   document.getElementById("lastName").value = p.lastName || "";
+  document.getElementById("nickname").value = p.nickname || "";
   document.getElementById("birthDate").value = p.birthDate || "";
   document.getElementById("deathDate").value = p.deathDate || "";
   document.getElementById("notes").value = p.notes || "";
@@ -78,7 +73,6 @@ async function loadPerson(id) {
   }
 }
 
-// Aperçu photo
 document.getElementById("photoInput").addEventListener("change", function(e) {
   photoFile = e.target.files[0];
   if (!photoFile) return;
@@ -93,22 +87,16 @@ document.getElementById("photoInput").addEventListener("change", function(e) {
   reader.readAsDataURL(photoFile);
 });
 
-// Soumission du formulaire
 document.getElementById("personForm").addEventListener("submit", async function(e) {
   e.preventDefault();
-
-  if (!isAdmin) {
-    alert("⛔ Seul l'administrateur peut modifier les données.");
-    return;
-  }
+  if (!isAdmin) { alert("⛔ Accès refusé."); return; }
 
   const submitBtn = document.getElementById("submitBtn");
-  submitBtn.textContent = "Enregistrement...";
   submitBtn.disabled = true;
+  submitBtn.textContent = "...";
 
   try {
     let photoURL = null;
-
     if (photoFile) {
       const fileName = Date.now() + "_" + photoFile.name;
       const ref = storage.ref("photos/" + fileName);
@@ -119,6 +107,7 @@ document.getElementById("personForm").addEventListener("submit", async function(
     const data = {
       firstName: document.getElementById("firstName").value.trim(),
       lastName: document.getElementById("lastName").value.trim(),
+      nickname: document.getElementById("nickname").value.trim() || null,
       birthDate: document.getElementById("birthDate").value || null,
       deathDate: document.getElementById("deathDate").value || null,
       fatherId: document.getElementById("fatherId").value || null,
@@ -141,20 +130,14 @@ document.getElementById("personForm").addEventListener("submit", async function(
 
   } catch (err) {
     alert("Erreur : " + err.message);
-    submitBtn.textContent = "Enregistrer";
     submitBtn.disabled = false;
+    submitBtn.textContent = "Enregistrer";
   }
 });
 
-// Suppression
 document.getElementById("deleteBtn").addEventListener("click", async function() {
-  if (!isAdmin) {
-    alert("⛔ Seul l'administrateur peut supprimer.");
-    return;
-  }
-
+  if (!isAdmin) { alert("⛔ Accès refusé."); return; }
   if (!confirm("Supprimer cette personne ? Cette action est irréversible.")) return;
-
   try {
     await db.collection("persons").doc(personId).delete();
     window.location.href = "dashboard.html";
