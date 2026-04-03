@@ -12,7 +12,7 @@ db.collection("persons")
 
       container.innerHTML += `
         <div style="padding: 12px 0; border-bottom: 1px solid #ddd;">
-          <strong>${birth}</strong> — ${p.firstname} ${p.lastname}
+          <strong>${birth}</strong> — ${p.firstName} ${p.lastName}
         </div>
       `;
     });
