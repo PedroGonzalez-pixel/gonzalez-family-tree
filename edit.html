@@ -1,15 +1,102 @@
 <!DOCTYPE html>
 <html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ajouter / Modifier – Famille Gonzalez</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>
+</head>
+<body>
 
+  <header class="topbar">
+    <a href="dashboard.html" class="btn">← Retour</a>
+    <h1 id="pageTitle">Ajouter une personne</h1>
+    <button id="logoutBtn" class="btn">Déconnexion</button>
+  </header>
 
-  
-  
-  
-  
-  
-  
- 
-    Ajouter / Modifier une personne
+  <main class="form-container">
+    <form id="personForm">
 
-    
-  
+      <!-- Photo de profil -->
+      <div class="form-group center">
+        <div class="avatar-preview" id="avatarPreview">📷</div>
+        <label class="btn-upload">
+          Choisir une photo
+          <input type="file" id="photoInput" accept="image/*" hidden>
+        </label>
+      </div>
+
+      <!-- Identité -->
+      <div class="form-group">
+        <label>Prénom *</label>
+        <input type="text" id="firstName" placeholder="Prénom" required>
+      </div>
+      <div class="form-group">
+        <label>Nom *</label>
+        <input type="text" id="lastName" placeholder="Nom de famille" required>
+      </div>
+
+      <!-- Dates -->
+      <div class="form-row">
+        <div class="form-group">
+          <label>Date de naissance</label>
+          <input type="date" id="birthDate">
+        </div>
+        <div class="form-group">
+          <label>Date de décès</label>
+          <input type="date" id="deathDate">
+        </div>
+      </div>
+
+      <!-- Relations -->
+      <div class="form-group">
+        <label>Père</label>
+        <select id="fatherId">
+          <option value="">— Sélectionner —</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Mère</label>
+        <select id="motherId">
+          <option value="">— Sélectionner —</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Conjoint(e)</label>
+        <select id="spouseId">
+          <option value="">— Sélectionner —</option>
+        </select>
+      </div>
+
+      <!-- Notes -->
+      <div class="form-group">
+        <label>Notes / Biographie</label>
+        <textarea id="notes" rows="4" placeholder="Anecdotes, histoire, souvenirs..."></textarea>
+      </div>
+
+      <!-- Boutons -->
+      <div class="form-actions">
+        <button type="submit" class="btn-primary" id="submitBtn">Enregistrer</button>
+        <button type="button" class="btn-danger" id="deleteBtn" style="display:none;">Supprimer</button>
+      </div>
+
+    </form>
+  </main>
+
+  <script src="js/firebase-init.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/edit.js"></script>
+  <script>
+    document.getElementById("logoutBtn").addEventListener("click", function() {
+      firebase.auth().signOut().then(function() {
+        window.location.href = "index.html";
+      });
+    });
+  </script>
+
+</body>
+</html>
