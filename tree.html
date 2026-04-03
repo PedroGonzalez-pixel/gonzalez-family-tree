@@ -4,49 +4,185 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Arbre Généalogique – Famille Gonzalez</title>
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=Playfair+Display:wght@400;500&display=swap" rel="stylesheet">
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css">
   <style>
-    #tree-container {
-      width: 100%;
-      height: calc(100vh - 70px);
-      background: #f9f9f9;
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #f5f5f7;
+      --surface: #ffffff;
+      --border: #e0e0e5;
+      --text: #1d1d1f;
+      --muted: #6e6e73;
+      --accent: #0071e3;
+      --accent-hover: #0077ed;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 2px 20px rgba(0,0,0,0.06);
+      --line: #c0c0c8;
+      --node-w: 140px;
+      --node-h: 72px;
+      --h-gap: 40px;
+      --v-gap: 80px;
     }
-    .tree-loading {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: calc(100vh - 70px);
+    body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: auto; }
+
+    /* TOPBAR */
+    .topbar {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(255,255,255,0.85);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 32px; height: 56px;
+    }
+    .topbar-left { display: flex; align-items: center; gap: 12px; }
+    .topbar h1 { font-family: 'Playfair Display', serif; font-size: 17px; font-weight: 500; }
+    .btn-back {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 14px; color: var(--accent); text-decoration: none;
+      padding: 6px 10px; border-radius: var(--radius-sm); transition: background 0.15s;
+    }
+    .btn-back:hover { background: rgba(0,113,227,0.08); }
+    .topbar-right { display: flex; align-items: center; gap: 12px; }
+    .lang-switcher {
+      display: flex; background: var(--bg);
+      border: 1px solid var(--border); border-radius: 20px; padding: 3px; gap: 2px;
+    }
+    .lang-btn {
+      border: none; background: transparent; padding: 4px 12px; border-radius: 16px;
+      font-size: 12px; font-weight: 500; cursor: pointer; color: var(--muted); transition: all 0.2s;
+    }
+    .lang-btn.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+    .btn-logout {
+      border: 1px solid var(--border); background: transparent;
+      padding: 6px 14px; border-radius: 20px; font-size: 13px;
+      color: var(--muted); cursor: pointer; transition: all 0.15s;
+    }
+    .btn-logout:hover { background: var(--bg); color: var(--text); }
+
+    /* TREE AREA */
+    #tree-wrapper {
+      width: 100%; overflow: auto;
+      padding: 40px 40px 80px;
+      min-height: calc(100vh - 56px);
+    }
+
+    #tree-canvas {
+      position: relative;
+      margin: 0 auto;
+    }
+
+    /* SVG lignes */
+    #tree-svg {
+      position: absolute;
+      top: 0; left: 0;
+      pointer-events: none;
+      overflow: visible;
+    }
+
+    /* NOEUD */
+    .node {
+      position: absolute;
+      width: var(--node-w);
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      cursor: pointer;
+      transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+      box-shadow: var(--shadow);
+      text-align: center;
+      text-decoration: none;
+      display: block;
+    }
+    .node:hover {
+      border-color: var(--accent);
+      box-shadow: 0 4px 24px rgba(0,113,227,0.15);
+      transform: translateY(-2px);
+    }
+    .node.deceased {
+      background: #f5f5f5;
+      border-color: #c8c8cc;
+    }
+    .node-name {
+      font-size: 13px; font-weight: 500; color: var(--text);
+      line-height: 1.3; margin-bottom: 4px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .node-dates {
+      font-size: 11px; color: var(--muted); line-height: 1.4;
+    }
+    .node-photo {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: var(--bg); border: 1px solid var(--border);
+      margin: 0 auto 8px;
+      background-size: cover; background-position: center;
+      display: flex; align-items: center; justify-content: center;
       font-size: 16px;
-      color: #888;
+    }
+
+    /* LOADING */
+    .loading {
+      display: flex; align-items: center; justify-content: center;
+      height: 300px; color: var(--muted); font-size: 15px;
+    }
+
+    @media (max-width: 600px) {
+      .topbar { padding: 0 16px; }
+      .topbar h1 { display: none; }
+      #tree-wrapper { padding: 20px 16px 60px; }
     }
   </style>
 </head>
 <body>
 
   <header class="topbar">
-    <a href="dashboard.html" class="btn">← Retour</a>
-    <h1>Arbre Généalogique</h1>
-    <button id="logoutBtn" class="btn">Déconnexion</button>
+    <div class="topbar-left">
+      <a href="dashboard.html" class="btn-back">
+        <svg width="7" height="12" viewBox="0 0 7 12" fill="none"><path d="M6 1L1 6l5 5" stroke="#0071e3" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span data-i18n="back">Retour</span>
+      </a>
+      <h1 data-i18n="title">Arbre Généalogique</h1>
+    </div>
+    <div class="topbar-right">
+      <div class="lang-switcher">
+        <button class="lang-btn active" onclick="setLang('fr')">FR</button>
+        <button class="lang-btn" onclick="setLang('es')">ES</button>
+      </div>
+      <button class="btn-logout" id="logoutBtn" data-i18n="logout">Déconnexion</button>
+    </div>
   </header>
 
-  <div id="tree-container">
-    <div class="tree-loading" id="loadingMsg">Chargement de l'arbre...</div>
+  <div id="tree-wrapper">
+    <div class="loading" id="loadingMsg">Chargement de l'arbre...</div>
+    <div id="tree-canvas" style="display:none;">
+      <svg id="tree-svg"></svg>
+    </div>
   </div>
 
   <script src="js/firebase-init.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/tree.js"></script>
   <script>
+    const i18n = {
+      fr: { back: "Retour", title: "Arbre Généalogique", logout: "Déconnexion", loading: "Chargement de l'arbre...", empty: "Aucune personne enregistrée." },
+      es: { back: "Volver", title: "Árbol Genealógico", logout: "Cerrar sesión", loading: "Cargando el árbol...", empty: "Sin personas registradas." }
+    };
+    let currentLang = localStorage.getItem("lang") || "fr";
+    function setLang(lang) {
+      currentLang = lang;
+      localStorage.setItem("lang", lang);
+      document.querySelectorAll(".lang-btn").forEach(btn => btn.classList.toggle("active", btn.textContent === lang.toUpperCase()));
+      document.querySelectorAll("[data-i18n]").forEach(el => { const k = el.getAttribute("data-i18n"); if (i18n[lang][k]) el.textContent = i18n[lang][k]; });
+    }
+    setLang(currentLang);
     document.getElementById("logoutBtn").addEventListener("click", function() {
-      firebase.auth().signOut().then(function() {
-        window.location.href = "index.html";
-      });
+      firebase.auth().signOut().then(function() { window.location.href = "index.html"; });
     });
   </script>
 
