@@ -4,75 +4,241 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Fiche Personne – Famille Gonzalez</title>
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=Playfair+Display:wght@400;500&display=swap" rel="stylesheet">
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #f5f5f7;
+      --surface: #ffffff;
+      --surface2: #f9f9fb;
+      --border: #e0e0e5;
+      --text: #1d1d1f;
+      --muted: #6e6e73;
+      --accent: #0071e3;
+      --accent-hover: #0077ed;
+      --danger: #ff3b30;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 2px 20px rgba(0,0,0,0.06);
+    }
+    body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* TOPBAR */
+    .topbar {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(255,255,255,0.85);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 32px; height: 56px;
+    }
+    .topbar-left { display: flex; align-items: center; gap: 12px; }
+    .topbar h1 { font-family: 'Playfair Display', serif; font-size: 17px; font-weight: 500; }
+    .btn-back {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 14px; color: var(--accent); text-decoration: none;
+      padding: 6px 10px; border-radius: var(--radius-sm); transition: background 0.15s;
+    }
+    .btn-back:hover { background: rgba(0,113,227,0.08); }
+    .topbar-right { display: flex; align-items: center; gap: 12px; }
+
+    .lang-switcher {
+      display: flex; background: var(--bg);
+      border: 1px solid var(--border); border-radius: 20px; padding: 3px; gap: 2px;
+    }
+    .lang-btn {
+      border: none; background: transparent; padding: 4px 12px; border-radius: 16px;
+      font-size: 12px; font-weight: 500; cursor: pointer; color: var(--muted); transition: all 0.2s;
+    }
+    .lang-btn.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+    .btn-logout {
+      border: 1px solid var(--border); background: transparent;
+      padding: 6px 14px; border-radius: 20px; font-size: 13px;
+      color: var(--muted); cursor: pointer; transition: all 0.15s;
+    }
+    .btn-logout:hover { background: var(--bg); color: var(--text); }
+
+    /* MAIN */
+    main { max-width: 680px; margin: 40px auto; padding: 0 20px 80px; }
+
+    /* HERO */
+    .person-hero {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 32px; margin-bottom: 16px;
+      box-shadow: var(--shadow);
+      display: flex; align-items: center; gap: 28px;
+    }
+    .avatar-large {
+      width: 100px; height: 100px; border-radius: 50%;
+      background: var(--bg); border: 2px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 36px; flex-shrink: 0;
+      background-size: cover; background-position: center; overflow: hidden;
+    }
+    .person-identity { flex: 1; }
+    .person-identity h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 26px; font-weight: 500; line-height: 1.2; margin-bottom: 4px;
+    }
+    .person-nickname {
+      font-size: 14px; color: var(--muted); font-style: italic; margin-bottom: 8px;
+    }
+    .person-dates {
+      display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px;
+    }
+    .date-badge {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 13px; color: var(--muted);
+      background: var(--bg); border: 1px solid var(--border);
+      padding: 5px 12px; border-radius: 20px;
+    }
+    .date-badge span { font-weight: 500; color: var(--text); }
+    .btn-edit {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--accent); color: white; border: none;
+      padding: 9px 20px; border-radius: 20px; font-size: 13px;
+      font-weight: 500; text-decoration: none; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-edit:hover { background: var(--accent-hover); }
+
+    /* CARDS */
+    .info-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 24px; margin-bottom: 16px;
+      box-shadow: var(--shadow);
+    }
+    .info-card h3 {
+      font-size: 12px; font-weight: 500; text-transform: uppercase;
+      letter-spacing: 0.07em; color: var(--muted); margin-bottom: 20px;
+    }
+
+    /* RELATIONS */
+    .relation-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+    }
+    .relation-item { display: flex; flex-direction: column; gap: 4px; }
+    .relation-label { font-size: 12px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
+    .relation-link {
+      font-size: 15px; color: var(--accent); text-decoration: none;
+      font-weight: 500; transition: opacity 0.15s;
+    }
+    .relation-link:hover { opacity: 0.7; }
+    .relation-empty { font-size: 15px; color: var(--muted); }
+
+    /* ENFANTS */
+    .children-grid {
+      display: flex; flex-wrap: wrap; gap: 10px;
+    }
+    .child-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--bg); border: 1px solid var(--border);
+      padding: 7px 16px; border-radius: 20px;
+      font-size: 14px; color: var(--text); text-decoration: none;
+      transition: all 0.15s;
+    }
+    .child-pill:hover { background: var(--accent); color: white; border-color: var(--accent); }
+
+    /* NOTES */
+    .notes-text {
+      font-size: 15px; line-height: 1.7; color: var(--text);
+      white-space: pre-wrap;
+    }
+    .notes-empty { font-size: 15px; color: var(--muted); font-style: italic; }
+
+    /* LOADING */
+    .loading {
+      display: flex; align-items: center; justify-content: center;
+      height: 200px; color: var(--muted); font-size: 15px;
+    }
+
+    @media (max-width: 600px) {
+      .person-hero { flex-direction: column; align-items: flex-start; }
+      .relation-grid { grid-template-columns: 1fr 1fr; }
+      main { margin: 24px auto; }
+      .topbar { padding: 0 16px; }
+      .topbar h1 { display: none; }
+    }
+  </style>
 </head>
 <body>
 
   <header class="topbar">
-    <a href="javascript:history.back()" class="btn">← Retour</a>
-    <h1 id="personName">Fiche Personne</h1>
-    <button id="logoutBtn" class="btn">Déconnexion</button>
+    <div class="topbar-left">
+      <a href="javascript:history.back()" class="btn-back">
+        <svg width="7" height="12" viewBox="0 0 7 12" fill="none"><path d="M6 1L1 6l5 5" stroke="#0071e3" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span data-i18n="back">Retour</span>
+      </a>
+      <h1 id="topbarName">Fiche Personne</h1>
+    </div>
+    <div class="topbar-right">
+      <div class="lang-switcher">
+        <button class="lang-btn active" onclick="setLang('fr')">FR</button>
+        <button class="lang-btn" onclick="setLang('es')">ES</button>
+      </div>
+      <button class="btn-logout" id="logoutBtn" data-i18n="logout">Déconnexion</button>
+    </div>
   </header>
 
-  <main class="person-container">
-
-    <!-- Photo + identité -->
-    <div class="person-header">
-      <div class="avatar-large" id="personPhoto">👤</div>
-      <div class="person-identity">
-        <h2 id="fullName">—</h2>
-        <p id="dates" class="muted">—</p>
-        <a id="editLink" href="#" class="btn-primary" style="display:none;">✏️ Modifier</a>
-      </div>
-    </div>
-
-    <!-- Relations -->
-    <section class="person-section">
-      <h3>Famille</h3>
-      <div class="relation-grid">
-        <div class="relation-card">
-          <p class="relation-label">Père</p>
-          <a id="fatherLink" href="#" class="relation-name">—</a>
-        </div>
-        <div class="relation-card">
-          <p class="relation-label">Mère</p>
-          <a id="motherLink" href="#" class="relation-name">—</a>
-        </div>
-        <div class="relation-card">
-          <p class="relation-label">Conjoint(e)</p>
-          <a id="spouseLink" href="#" class="relation-name">—</a>
-        </div>
-      </div>
-    </section>
-
-    <!-- Enfants -->
-    <section class="person-section">
-      <h3>Enfants</h3>
-      <div id="childrenList" class="relation-grid">
-        <p class="muted">Aucun enfant enregistré</p>
-      </div>
-    </section>
-
-    <!-- Notes -->
-    <section class="person-section">
-      <h3>Notes / Biographie</h3>
-      <p id="personNotes" class="notes-text muted">—</p>
-    </section>
-
+  <main id="mainContent">
+    <div class="loading" id="loadingMsg">Chargement...</div>
   </main>
 
   <script src="js/firebase-init.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/person.js"></script>
   <script>
-    document.getElementById("logoutBtn").addEventListener("click", function() {
-      firebase.auth().signOut().then(function() {
-        window.location.href = "index.html";
+    const i18n = {
+      fr: {
+        back: "Retour", logout: "Déconnexion",
+        loading: "Chargement...", notFound: "Personne introuvable.",
+        edit: "Modifier", born: "Né(e) le", died: "Décédé(e) le",
+        unknownDates: "Dates inconnues",
+        sectionFamily: "Famille", father: "Père", mother: "Mère", spouse: "Conjoint(e)",
+        sectionChildren: "Enfants", noChildren: "Aucun enfant enregistré",
+        sectionNotes: "Notes & Biographie", noNotes: "Aucune note.",
+        nickname: "Surnom"
+      },
+      es: {
+        back: "Volver", logout: "Cerrar sesión",
+        loading: "Cargando...", notFound: "Persona no encontrada.",
+        edit: "Modificar", born: "Nacido(a) el", died: "Fallecido(a) el",
+        unknownDates: "Fechas desconocidas",
+        sectionFamily: "Familia", father: "Padre", mother: "Madre", spouse: "Cónyuge",
+        sectionChildren: "Hijos", noChildren: "Sin hijos registrados",
+        sectionNotes: "Notas & Biografía", noNotes: "Sin notas.",
+        nickname: "Apodo"
+      }
+    };
+
+    let currentLang = localStorage.getItem("lang") || "fr";
+
+    function setLang(lang) {
+      currentLang = lang;
+      localStorage.setItem("lang", lang);
+      document.querySelectorAll(".lang-btn").forEach(btn => {
+        btn.classList.toggle("active", btn.textContent === lang.toUpperCase());
       });
+      applyTranslations();
+    }
+
+    function applyTranslations() {
+      const t = i18n[currentLang];
+      document.querySelectorAll("[data-i18n]").forEach(el => {
+        const key = el.getAttribute("data-i18n");
+        if (t[key]) el.textContent = t[key];
+      });
+    }
+
+    setLang(currentLang);
+
+    document.getElementById("logoutBtn").addEventListener("click", function() {
+      firebase.auth().signOut().then(function() { window.location.href = "index.html"; });
     });
   </script>
 
