@@ -1,20 +1,54 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Arbre Généalogique</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Arbre Généalogique – Famille Gonzalez</title>
   <link rel="stylesheet" href="css/style.css">
-  https://unpkg.com/vis-network/standalone/umd/vis-network.min.js
-  <script src="js/firebase-init.js" defer></script>
-  <script src="js/auth.js" defer></script>
-  <script src="js/tree.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css">
+  <style>
+    #tree-container {
+      width: 100%;
+      height: calc(100vh - 70px);
+      background: #f9f9f9;
+    }
+    .tree-loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: calc(100vh - 70px);
+      font-size: 16px;
+      color: #888;
+    }
+  </style>
 </head>
 <body>
+
   <header class="topbar">
+    <a href="dashboard.html" class="btn">← Retour</a>
     <h1>Arbre Généalogique</h1>
-    <button onclick="firebase.auth().signOut()" class="btn">Déconnexion</button>
+    <button id="logoutBtn" class="btn">Déconnexion</button>
   </header>
-  <div id="tree" style="height:90vh; margin:20px;"></div>
+
+  <div id="tree-container">
+    <div class="tree-loading" id="loadingMsg">Chargement de l'arbre...</div>
+  </div>
+
+  <script src="js/firebase-init.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/tree.js"></script>
+  <script>
+    document.getElementById("logoutBtn").addEventListener("click", function() {
+      firebase.auth().signOut().then(function() {
+        window.location.href = "index.html";
+      });
+    });
+  </script>
+
 </body>
 </html>
