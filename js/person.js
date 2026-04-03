@@ -1,116 +1,159 @@
 const urlParams = new URLSearchParams(window.location.search);
 const personId = urlParams.get("id");
 
-if (!personId) {
-  window.location.href = "dashboard.html";
-}
+if (!personId) window.location.href = "dashboard.html";
 
-// Vérifie si l'utilisateur est admin dans Firestore
 async function checkAdmin(email) {
   try {
     const doc = await db.collection("authorizedUsers").doc(email).get();
     if (!doc.exists) return false;
     return doc.data().role === "admin";
-  } catch (e) {
-    return false;
-  }
+  } catch (e) { return false; }
 }
 
 firebase.auth().onAuthStateChanged(async function(user) {
   if (!user) return;
-
   const isAdmin = await checkAdmin(user.email);
-
-  if (isAdmin) {
-    const editLink = document.getElementById("editLink");
-    editLink.href = "edit.html?id=" + personId;
-    editLink.style.display = "inline-block";
-  }
-
-  await loadPerson(personId);
+  await loadPerson(personId, isAdmin);
 });
 
-async function loadPerson(id) {
+async function loadPerson(id, isAdmin) {
   try {
     const doc = await db.collection("persons").doc(id).get();
     if (!doc.exists) {
-      alert("Personne introuvable.");
-      window.location.href = "dashboard.html";
+      document.getElementById("mainContent").innerHTML = "<div class='loading'>Personne introuvable.</div>";
       return;
     }
 
     const p = doc.data();
-
+    const t = window.i18n ? window.i18n[window.currentLang || "fr"] : {};
     const fullName = (p.firstName || "") + " " + (p.lastName || "");
-    document.getElementById("fullName").textContent = fullName;
-    document.getElementById("personName").textContent = fullName;
 
-    let dates = "";
-    if (p.birthDate) dates += "Né(e) le " + formatDate(p.birthDate);
-    if (p.deathDate) dates += " — Décédé(e) le " + formatDate(p.deathDate);
-    document.getElementById("dates").textContent = dates || "Dates inconnues";
+    // Topbar
+    document.getElementById("topbarName").textContent = fullName;
 
-    if (p.photoURL) {
-      const photo = document.getElementById("personPhoto");
-      photo.style.backgroundImage = "url(" + p.photoURL + ")";
-      photo.style.backgroundSize = "cover";
-      photo.style.backgroundPosition = "center";
-      photo.textContent = "";
+    // Dates
+    let datesHTML = "";
+    if (p.birthDate) {
+      datesHTML += `<div class="date-badge">🕊 <span>${formatDate(p.birthDate)}</span></div>`;
+    }
+    if (p.deathDate) {
+      datesHTML += `<div class="date-badge">✝ <span>${formatDate(p.deathDate)}</span></div>`;
     }
 
-    document.getElementById("personNotes").textContent = p.notes || "Aucune note.";
+    // Bouton modifier
+    const editBtn = isAdmin
+      ? `<a href="edit.html?id=${id}" class="btn-edit" data-i18n="edit">✏️ Modifier</a>`
+      : "";
 
-    if (p.fatherId) await loadRelation("fatherLink", p.fatherId);
-    if (p.motherId) await loadRelation("motherLink", p.motherId);
-    if (p.spouseId) await loadRelation("spouseLink", p.spouseId);
+    // Surnom
+    const nicknameHTML = p.nickname
+      ? `<p class="person-nickname">"${p.nickname}"</p>`
+      : "";
 
+    // Photo
+    const photoStyle = p.photoURL
+      ? `style="background-image:url('${p.photoURL}');background-size:cover;background-position:center;"`
+      : "";
+    const photoContent = p.photoURL ? "" : "👤";
+
+    // HTML principal
+    const html = `
+      <div class="person-hero">
+        <div class="avatar-large" ${photoStyle}>${photoContent}</div>
+        <div class="person-identity">
+          <h2>${fullName}</h2>
+          ${nicknameHTML}
+          <div class="person-dates">${datesHTML || `<span class="relation-empty">Dates inconnues</span>`}</div>
+          ${editBtn}
+        </div>
+      </div>
+
+      <div class="info-card" id="familyCard">
+        <h3 data-i18n="sectionFamily">Famille</h3>
+        <div class="relation-grid">
+          <div class="relation-item">
+            <span class="relation-label" data-i18n="father">Père</span>
+            <span class="relation-empty" id="fatherSlot">—</span>
+          </div>
+          <div class="relation-item">
+            <span class="relation-label" data-i18n="mother">Mère</span>
+            <span class="relation-empty" id="motherSlot">—</span>
+          </div>
+          <div class="relation-item">
+            <span class="relation-label" data-i18n="spouse">Conjoint(e)</span>
+            <span class="relation-empty" id="spouseSlot">—</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="info-card">
+        <h3 data-i18n="sectionChildren">Enfants</h3>
+        <div class="children-grid" id="childrenGrid">
+          <span class="notes-empty" data-i18n="noChildren">Aucun enfant enregistré</span>
+        </div>
+      </div>
+
+      <div class="info-card">
+        <h3 data-i18n="sectionNotes">Notes & Biographie</h3>
+        <p class="${p.notes ? 'notes-text' : 'notes-empty'}" id="notesText">
+          ${p.notes || "Aucune note."}
+        </p>
+      </div>
+    `;
+
+    document.getElementById("mainContent").innerHTML = html;
+
+    // Appliquer traductions sur le nouveau contenu
+    if (window.applyTranslations) window.applyTranslations();
+
+    // Charger les relations
+    if (p.fatherId) await loadRelation("fatherSlot", p.fatherId);
+    if (p.motherId) await loadRelation("motherSlot", p.motherId);
+    if (p.spouseId) await loadRelation("spouseSlot", p.spouseId);
     await loadChildren(id);
 
   } catch (err) {
-    console.error("Erreur chargement :", err.message);
+    console.error("Erreur :", err.message);
+    document.getElementById("mainContent").innerHTML = "<div class='loading'>Erreur de chargement.</div>";
   }
 }
 
-async function loadRelation(elementId, relatedId) {
+async function loadRelation(slotId, relatedId) {
   try {
     const doc = await db.collection("persons").doc(relatedId).get();
     if (!doc.exists) return;
     const p = doc.data();
-    const link = document.getElementById(elementId);
-    link.textContent = p.firstName + " " + p.lastName;
-    link.href = "person.html?id=" + relatedId;
+    const slot = document.getElementById(slotId);
+    if (!slot) return;
+    slot.outerHTML = `<a href="person.html?id=${relatedId}" class="relation-link">${p.firstName} ${p.lastName}</a>`;
   } catch (e) {}
 }
 
 async function loadChildren(parentId) {
   try {
-    const snapshot = await db.collection("persons")
-      .where("fatherId", "==", parentId).get();
-    const snapshot2 = await db.collection("persons")
-      .where("motherId", "==", parentId).get();
+    const [s1, s2] = await Promise.all([
+      db.collection("persons").where("fatherId", "==", parentId).get(),
+      db.collection("persons").where("motherId", "==", parentId).get()
+    ]);
 
     const children = {};
-    snapshot.forEach(doc => children[doc.id] = doc.data());
-    snapshot2.forEach(doc => children[doc.id] = doc.data());
+    s1.forEach(doc => children[doc.id] = doc.data());
+    s2.forEach(doc => children[doc.id] = doc.data());
 
-    const container = document.getElementById("childrenList");
+    const grid = document.getElementById("childrenGrid");
     const ids = Object.keys(children);
+    if (ids.length === 0) return;
 
-    if (ids.length === 0) {
-      container.innerHTML = "<p class='muted'>Aucun enfant enregistré</p>";
-      return;
-    }
-
-    container.innerHTML = "";
+    grid.innerHTML = "";
     ids.forEach(id => {
       const p = children[id];
-      const card = document.createElement("a");
-      card.href = "person.html?id=" + id;
-      card.className = "relation-card";
-      card.innerHTML = "<p class='relation-name'>" + p.firstName + " " + p.lastName + "</p>";
-      container.appendChild(card);
+      const pill = document.createElement("a");
+      pill.href = "person.html?id=" + id;
+      pill.className = "child-pill";
+      pill.textContent = p.firstName + " " + p.lastName;
+      grid.appendChild(pill);
     });
-
   } catch (e) {}
 }
 
