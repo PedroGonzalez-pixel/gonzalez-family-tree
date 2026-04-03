@@ -1,15 +1,80 @@
 <!DOCTYPE html>
 <html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fiche Personne – Famille Gonzalez</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>
+</head>
+<body>
 
+  <header class="topbar">
+    <a href="javascript:history.back()" class="btn">← Retour</a>
+    <h1 id="personName">Fiche Personne</h1>
+    <button id="logoutBtn" class="btn">Déconnexion</button>
+  </header>
 
-  
-  
-  
-  
-  
-  
- 
-    
+  <main class="person-container">
 
-    
-  
+    <!-- Photo + identité -->
+    <div class="person-header">
+      <div class="avatar-large" id="personPhoto">👤</div>
+      <div class="person-identity">
+        <h2 id="fullName">—</h2>
+        <p id="dates" class="muted">—</p>
+        <a id="editLink" href="#" class="btn-primary" style="display:none;">✏️ Modifier</a>
+      </div>
+    </div>
+
+    <!-- Relations -->
+    <section class="person-section">
+      <h3>Famille</h3>
+      <div class="relation-grid">
+        <div class="relation-card">
+          <p class="relation-label">Père</p>
+          <a id="fatherLink" href="#" class="relation-name">—</a>
+        </div>
+        <div class="relation-card">
+          <p class="relation-label">Mère</p>
+          <a id="motherLink" href="#" class="relation-name">—</a>
+        </div>
+        <div class="relation-card">
+          <p class="relation-label">Conjoint(e)</p>
+          <a id="spouseLink" href="#" class="relation-name">—</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Enfants -->
+    <section class="person-section">
+      <h3>Enfants</h3>
+      <div id="childrenList" class="relation-grid">
+        <p class="muted">Aucun enfant enregistré</p>
+      </div>
+    </section>
+
+    <!-- Notes -->
+    <section class="person-section">
+      <h3>Notes / Biographie</h3>
+      <p id="personNotes" class="notes-text muted">—</p>
+    </section>
+
+  </main>
+
+  <script src="js/firebase-init.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/person.js"></script>
+  <script>
+    document.getElementById("logoutBtn").addEventListener("click", function() {
+      firebase.auth().signOut().then(function() {
+        window.location.href = "index.html";
+      });
+    });
+  </script>
+
+</body>
+</html>
