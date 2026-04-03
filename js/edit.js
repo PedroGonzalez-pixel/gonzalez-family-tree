@@ -1,20 +1,34 @@
-// Email administrateur — seul cet email peut ajouter/modifier
-const ADMIN_EMAIL = "TON_EMAIL@gmail.com"; // ← Remplace par ton email
-
 const urlParams = new URLSearchParams(window.location.search);
-const personId = urlParams.get("id"); // null = nouveau, sinon = modification
+const personId = urlParams.get("id");
 
 let photoFile = null;
-let allPersons = [];
+let isAdmin = false;
+
+// Vérifie si l'utilisateur est admin dans Firestore
+async function checkAdmin(email) {
+  try {
+    const doc = await db.collection("authorizedUsers").doc(email).get();
+    if (!doc.exists) return false;
+    return doc.data().role === "admin";
+  } catch (e) {
+    return false;
+  }
+}
 
 // Chargement initial
 firebase.auth().onAuthStateChanged(async function(user) {
   if (!user) return;
 
-  // Charge toutes les personnes pour les selects
+  isAdmin = await checkAdmin(user.email);
+
+  if (!isAdmin) {
+    alert("⛔ Seul l'administrateur peut modifier les données.");
+    window.location.href = "dashboard.html";
+    return;
+  }
+
   await loadAllPersons();
 
-  // Si modification, charge les données existantes
   if (personId) {
     document.getElementById("pageTitle").textContent = "Modifier une personne";
     document.getElementById("deleteBtn").style.display = "inline-block";
@@ -25,20 +39,16 @@ firebase.auth().onAuthStateChanged(async function(user) {
 // Charge toutes les personnes dans les selects
 async function loadAllPersons() {
   const snapshot = await db.collection("persons").orderBy("lastName").get();
-  allPersons = [];
-  snapshot.forEach(doc => {
-    allPersons.push({ id: doc.id, ...doc.data() });
-  });
-
   const selects = ["fatherId", "motherId", "spouseId"];
-  selects.forEach(selectId => {
-    const select = document.getElementById(selectId);
-    allPersons.forEach(p => {
-      if (p.id === personId) return; // Exclure soi-même
+
+  snapshot.forEach(doc => {
+    if (doc.id === personId) return;
+    const p = doc.data();
+    selects.forEach(selectId => {
       const option = document.createElement("option");
-      option.value = p.id;
+      option.value = doc.id;
       option.textContent = p.firstName + " " + p.lastName;
-      select.appendChild(option);
+      document.getElementById(selectId).appendChild(option);
     });
   });
 }
@@ -62,6 +72,8 @@ async function loadPerson(id) {
   if (p.photoURL) {
     const preview = document.getElementById("avatarPreview");
     preview.style.backgroundImage = "url(" + p.photoURL + ")";
+    preview.style.backgroundSize = "cover";
+    preview.style.backgroundPosition = "center";
     preview.textContent = "";
   }
 }
@@ -74,6 +86,8 @@ document.getElementById("photoInput").addEventListener("change", function(e) {
   reader.onload = function(ev) {
     const preview = document.getElementById("avatarPreview");
     preview.style.backgroundImage = "url(" + ev.target.result + ")";
+    preview.style.backgroundSize = "cover";
+    preview.style.backgroundPosition = "center";
     preview.textContent = "";
   };
   reader.readAsDataURL(photoFile);
@@ -83,8 +97,7 @@ document.getElementById("photoInput").addEventListener("change", function(e) {
 document.getElementById("personForm").addEventListener("submit", async function(e) {
   e.preventDefault();
 
-  const user = firebase.auth().currentUser;
-  if (!user || user.email !== ADMIN_EMAIL) {
+  if (!isAdmin) {
     alert("⛔ Seul l'administrateur peut modifier les données.");
     return;
   }
@@ -96,7 +109,6 @@ document.getElementById("personForm").addEventListener("submit", async function(
   try {
     let photoURL = null;
 
-    // Upload photo si sélectionnée
     if (photoFile) {
       const fileName = Date.now() + "_" + photoFile.name;
       const ref = storage.ref("photos/" + fileName);
@@ -119,10 +131,8 @@ document.getElementById("personForm").addEventListener("submit", async function(
     if (photoURL) data.photoURL = photoURL;
 
     if (personId) {
-      // Modification
       await db.collection("persons").doc(personId).update(data);
     } else {
-      // Création
       data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
       await db.collection("persons").add(data);
     }
@@ -138,8 +148,7 @@ document.getElementById("personForm").addEventListener("submit", async function(
 
 // Suppression
 document.getElementById("deleteBtn").addEventListener("click", async function() {
-  const user = firebase.auth().currentUser;
-  if (!user || user.email !== ADMIN_EMAIL) {
+  if (!isAdmin) {
     alert("⛔ Seul l'administrateur peut supprimer.");
     return;
   }
