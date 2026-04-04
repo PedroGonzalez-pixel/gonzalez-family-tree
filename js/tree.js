@@ -16,18 +16,6 @@ async function buildTree() {
     const snap = await db.collection("persons").get();
     if (snap.empty) { msg("Aucune personne enregistrée."); return; }
     snap.forEach(d => { P[d.id] = { id: d.id, ...d.data() }; });
-
-    // ── DEBUG : affiche les données brutes ──
-    console.log("=== PERSONNES CHARGÉES ===");
-    Object.values(P).forEach(p => {
-      console.log(
-        p.firstName + " " + p.lastName,
-        "| fatherId:", p.fatherId || "—",
-        "| motherId:", p.motherId || "—",
-        "| spouseId:", p.spouseId || "—"
-      );
-    });
-
     render();
   } catch (e) { msg("Erreur : " + e.message); }
 }
@@ -35,35 +23,45 @@ async function buildTree() {
 function render() {
 
   // ── 1. Relations ──────────────────────────────────────────
-  const spouseOf   = {};
-  const childrenOf = {};
-  Object.keys(P).forEach(id => { childrenOf[id] = []; });
-
+  const spouseOf = {};
   Object.values(P).forEach(p => {
     if (p.spouseId && P[p.spouseId]) spouseOf[p.id] = p.spouseId;
-    if (p.fatherId && P[p.fatherId]) childrenOf[p.fatherId].push(p.id);
-    if (p.motherId && P[p.motherId]) childrenOf[p.motherId].push(p.id);
   });
 
   // ── 2. Calcul des niveaux ─────────────────────────────────
   const level = {};
 
+  // Racines = sans parents connus
   Object.keys(P).forEach(id => {
     const p = P[id];
-    if (!p.fatherId && !p.motherId) level[id] = 0;
+    const hasFather = p.fatherId && P[p.fatherId];
+    const hasMother = p.motherId && P[p.motherId];
+    if (!hasFather && !hasMother) level[id] = 0;
   });
 
+  // Propager vers les enfants
   for (let iter = 0; iter < 30; iter++) {
     Object.values(P).forEach(p => {
-      const parents = [p.fatherId, p.motherId].filter(pid => pid && P[pid]);
-      if (parents.length === 0) return;
-      const parentLevels = parents.map(pid => level[pid]).filter(l => l !== undefined);
-      if (parentLevels.length === parents.length) {
-        level[p.id] = Math.max(...parentLevels) + 1;
+      const fLv = p.fatherId && P[p.fatherId] ? level[p.fatherId] : undefined;
+      const mLv = p.motherId && P[p.motherId] ? level[p.motherId] : undefined;
+      const hasFather = p.fatherId && P[p.fatherId];
+      const hasMother = p.motherId && P[p.motherId];
+
+      if (!hasFather && !hasMother) return; // racine déjà traitée
+
+      if (hasFather && hasMother) {
+        if (fLv !== undefined && mLv !== undefined) {
+          level[p.id] = Math.max(fLv, mLv) + 1;
+        }
+      } else if (hasFather && fLv !== undefined) {
+        level[p.id] = fLv + 1;
+      } else if (hasMother && mLv !== undefined) {
+        level[p.id] = mLv + 1;
       }
     });
   }
 
+  // Conjoints sans parents → même niveau que leur conjoint
   for (let iter = 0; iter < 10; iter++) {
     Object.keys(P).forEach(id => {
       if (level[id] === undefined) {
@@ -73,6 +71,7 @@ function render() {
     });
   }
 
+  // Forcer conjoints au même niveau (max des deux)
   for (let iter = 0; iter < 10; iter++) {
     Object.keys(P).forEach(id => {
       const sp = spouseOf[id];
@@ -84,14 +83,8 @@ function render() {
     });
   }
 
+  // Fallback
   Object.keys(P).forEach(id => { if (level[id] === undefined) level[id] = 0; });
-
-  // ── DEBUG : affiche les niveaux calculés ──
-  console.log("=== NIVEAUX CALCULÉS ===");
-  Object.keys(P).forEach(id => {
-    const p = P[id];
-    console.log(p.firstName + " " + p.lastName, "→ niveau", level[id]);
-  });
 
   // ── 3. Grouper par niveau ─────────────────────────────────
   const byLevel = {};
@@ -156,11 +149,13 @@ function render() {
   const LS  = `stroke="#c0c0c8" stroke-width="1.5" fill="none"`;
   const LSD = `stroke="#aaaacc" stroke-width="1.5" stroke-dasharray="5,4" fill="none"`;
 
+  // Lignes de couple (pointillé)
   const drawnCouple = new Set();
   Object.keys(P).forEach(id => {
     const sp  = spouseOf[id];
+    if (!sp) return;
     const key = [id, sp].sort().join("~");
-    if (!sp || drawnCouple.has(key)) return;
+    if (drawnCouple.has(key)) return;
     drawnCouple.add(key);
     const pa = pos[id], pb = pos[sp];
     if (!pa || !pb) return;
@@ -170,24 +165,37 @@ function render() {
     lines += `<line x1="${left.x + NW}" y1="${y}" x2="${right.x}" y2="${y}" ${LSD}/>`;
   });
 
-  const groupsByParents = {};
+  // ── Lignes parent → enfant ────────────────────────────────
+  // Regroupe les enfants par leurs parents EXACTS (fatherId + motherId)
+  // Clé = fatherId + "|" + motherId (NON trié — ordre important)
+  const familyGroups = {};
+
   Object.values(P).forEach(p => {
     const fid = p.fatherId && P[p.fatherId] ? p.fatherId : null;
     const mid = p.motherId && P[p.motherId] ? p.motherId : null;
     if (!fid && !mid) return;
-    const key = [fid || "none", mid || "none"].sort().join("|");
-    if (!groupsByParents[key]) groupsByParents[key] = { fatherId: fid, motherId: mid, children: [] };
-    groupsByParents[key].children.push(p.id);
+
+    // Clé NON triée : père d'abord, mère ensuite
+    const key = (fid || "X") + "|" + (mid || "X");
+    if (!familyGroups[key]) {
+      familyGroups[key] = { fatherId: fid, motherId: mid, children: [] };
+    }
+    familyGroups[key].children.push(p.id);
   });
 
-  Object.values(groupsByParents).forEach(group => {
+  Object.values(familyGroups).forEach(group => {
     const { fatherId, motherId, children } = group;
+
+    // Point d'origine des lignes
     let originX, originY;
 
     if (fatherId && motherId) {
-      const pf = pos[fatherId], pm = pos[motherId];
+      const pf = pos[fatherId];
+      const pm = pos[motherId];
       if (!pf || !pm) return;
-      const left = pf.x < pm.x ? pf : pm;
+      // Milieu du gap entre les deux parents
+      const left  = pf.x < pm.x ? pf : pm;
+      const right = pf.x < pm.x ? pm : pf;
       originX = left.x + NW + CGAP / 2;
       originY = left.y + NH / 2;
     } else {
@@ -198,26 +206,37 @@ function render() {
       originY = pp.y + NH;
     }
 
-    const childPos = children.map(cid => pos[cid]).filter(Boolean);
-    if (childPos.length === 0) return;
+    // Positions des enfants
+    const childrenWithPos = children
+      .map(cid => ({ id: cid, pos: pos[cid] }))
+      .filter(c => c.pos);
+    if (childrenWithPos.length === 0) return;
 
-    const midY = childPos[0].y - VGAP / 2;
+    // Y de la barre horizontale = Y des enfants - VGAP/2
+    const childY  = childrenWithPos[0].pos.y;
+    const midY    = childY - VGAP / 2;
+
+    // Ligne verticale depuis l'origine
     lines += `<line x1="${originX}" y1="${originY}" x2="${originX}" y2="${midY}" ${LS}/>`;
 
-    const xs   = childPos.map(p => p.x + NW / 2);
+    // Xs des enfants
+    const xs   = childrenWithPos.map(c => c.pos.x + NW / 2);
     const minX = Math.min(...xs, originX);
     const maxX = Math.max(...xs, originX);
+
+    // Barre horizontale
     lines += `<line x1="${minX}" y1="${midY}" x2="${maxX}" y2="${midY}" ${LS}/>`;
 
-    childPos.forEach(cp => {
-      const cx = cp.x + NW / 2;
-      lines += `<line x1="${cx}" y1="${midY}" x2="${cx}" y2="${cp.y}" ${LS}/>`;
+    // Descente vers chaque enfant
+    childrenWithPos.forEach(c => {
+      const cx = c.pos.x + NW / 2;
+      lines += `<line x1="${cx}" y1="${midY}" x2="${cx}" y2="${c.pos.y}" ${LS}/>`;
     });
   });
 
   svg.innerHTML = lines;
 
-  // ── 8. Nœuds ──────────────────────────────────────────────
+  // ── 8. Nœuds HTML ─────────────────────────────────────────
   Object.keys(P).forEach(id => {
     const p  = P[id];
     const pt = pos[id];
