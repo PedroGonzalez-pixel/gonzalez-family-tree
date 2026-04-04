@@ -1,18 +1,21 @@
 // ============================================================
-// ARBRE GÉNÉALOGIQUE
-// - Racines en haut (pas de parents)
-// - Conjoints côte à côte au même niveau
-// - Enfants en dessous de leurs parents, reliés entre eux
-// - Âge pour les vivants
+// ARBRE GÉNÉALOGIQUE — algorithme corrigé
+//
+// Règles :
+// 1. Le niveau d'une personne = max(niveau père, niveau mère) + 1
+// 2. Si une personne n'a pas de parents connus dans l'arbre,
+//    elle prend le niveau de son conjoint (s'il en a un)
+// 3. Les conjoints sont côte à côte au même niveau
+// 4. Les enfants sont en dessous de leurs parents
 // ============================================================
 
-const NW = 148;   // node width
-const NH = 82;    // node height
-const HGAP = 48;  // gap horizontal entre nœuds distincts
-const CGAP = 16;  // gap entre conjoints
-const VGAP = 100; // gap vertical entre générations
+const NW   = 148;
+const NH   = 86;
+const HGAP = 40;
+const CGAP = 18;
+const VGAP = 100;
 
-let persons = {};
+let P = {}; // toutes les personnes
 
 firebase.auth().onAuthStateChanged(async function(user) {
   if (!user) return;
@@ -23,129 +26,147 @@ async function buildTree() {
   try {
     const snap = await db.collection("persons").get();
     if (snap.empty) {
-      document.getElementById("loadingMsg").textContent = "Aucune personne enregistrée.";
-      return;
+      msg("Aucune personne enregistrée."); return;
     }
-    snap.forEach(d => { persons[d.id] = { id: d.id, ...d.data() }; });
+    snap.forEach(d => { P[d.id] = { id: d.id, ...d.data() }; });
     render();
   } catch (e) {
-    document.getElementById("loadingMsg").textContent = "Erreur : " + e.message;
+    msg("Erreur : " + e.message);
   }
 }
 
 function render() {
-  // ── 1. Construire les couples ──────────────────────────────
-  const coupleOf = {};   // id → partnerId
-  const coupleUnits = []; // [{a, b}] — chaque couple une seule fois
-  const inCouple = new Set();
+  // ── Relations utiles ──────────────────────────────────────
+  const spouseOf   = {};  // id → spouseId
+  const parentsOf  = {};  // id → [parentId, ...]
+  const childrenOf = {};  // id → [childId, ...]
 
-  Object.values(persons).forEach(p => {
-    if (p.spouseId && persons[p.spouseId] && !inCouple.has(p.id) && !inCouple.has(p.spouseId)) {
-      coupleUnits.push({ a: p.id, b: p.spouseId });
-      inCouple.add(p.id);
-      inCouple.add(p.spouseId);
-      coupleOf[p.id] = p.spouseId;
-      coupleOf[p.spouseId] = p.id;
-    }
+  Object.keys(P).forEach(id => {
+    parentsOf[id]  = [];
+    childrenOf[id] = [];
   });
 
-  // ── 2. Trouver les enfants de chaque personne ──────────────
-  // childrenOf[id] = [childId, ...]
-  const childrenOf = {};
-  Object.keys(persons).forEach(id => { childrenOf[id] = []; });
-  Object.values(persons).forEach(p => {
-    if (p.fatherId && persons[p.fatherId]) childrenOf[p.fatherId].push(p.id);
-    if (p.motherId && persons[p.motherId]) childrenOf[p.motherId].push(p.id);
+  Object.values(P).forEach(p => {
+    if (p.spouseId && P[p.spouseId]) spouseOf[p.id] = p.spouseId;
+    if (p.fatherId && P[p.fatherId]) { parentsOf[p.id].push(p.fatherId); childrenOf[p.fatherId].push(p.id); }
+    if (p.motherId && P[p.motherId]) { parentsOf[p.id].push(p.motherId); childrenOf[p.motherId].push(p.id); }
   });
 
-  // ── 3. Calculer les niveaux par BFS ───────────────────────
+  // Dédoublonner childrenOf
+  Object.keys(childrenOf).forEach(id => {
+    childrenOf[id] = [...new Set(childrenOf[id])];
+  });
+
+  // ── Calcul des niveaux ────────────────────────────────────
+  // On itère jusqu'à convergence
   const level = {};
-  // Racines = personnes sans père ni mère connus
-  const roots = Object.keys(persons).filter(id => {
-    const p = persons[id];
-    return !p.fatherId && !p.motherId;
+
+  // Init : personnes sans parents connus → niveau 0
+  Object.keys(P).forEach(id => {
+    if (parentsOf[id].length === 0) level[id] = 0;
   });
 
-  const queue = [];
-  roots.forEach(id => { level[id] = 0; queue.push(id); });
-
-  // Si le conjoint d'une racine n'a pas de parents → même niveau
-  let head = 0;
-  while (head < queue.length) {
-    const id = queue[head++];
-    const lv = level[id];
-
-    // Conjoint → même niveau
-    const sp = coupleOf[id];
-    if (sp && !(sp in level)) {
-      level[sp] = lv;
-      queue.push(sp);
-    }
-
-    // Enfants → niveau + 1
-    // Enfants = union des enfants du père et de la mère
-    const p = persons[id];
-    const myChildren = new Set(childrenOf[id]);
-    // si conjoint connu, ajouter ses enfants aussi
-    if (sp) childrenOf[sp].forEach(c => myChildren.add(c));
-
-    myChildren.forEach(cid => {
-      if (!(cid in level)) {
-        level[cid] = lv + 1;
-        queue.push(cid);
+  // Propagation vers le bas (parents → enfants)
+  let changed = true;
+  let iterations = 0;
+  while (changed && iterations < 50) {
+    changed = false;
+    iterations++;
+    Object.keys(P).forEach(id => {
+      if (parentsOf[id].length > 0) {
+        const parentLevels = parentsOf[id].map(pid => level[pid]).filter(l => l !== undefined);
+        if (parentLevels.length > 0) {
+          const newLevel = Math.max(...parentLevels) + 1;
+          if (level[id] !== newLevel) { level[id] = newLevel; changed = true; }
+        }
       }
     });
   }
 
-  // Personnes non atteintes (îlots isolés)
-  Object.keys(persons).forEach(id => {
-    if (!(id in level)) {
-      level[id] = 0;
-      queue.push(id);
-      // et leur conjoint
-      const sp = coupleOf[id];
-      if (sp && !(sp in level)) level[sp] = 0;
-    }
+  // Personnes sans niveau (pas de parents connus, pas encore assignées)
+  // → hériter du niveau du conjoint si possible
+  changed = true;
+  iterations = 0;
+  while (changed && iterations < 20) {
+    changed = false;
+    iterations++;
+    Object.keys(P).forEach(id => {
+      if (level[id] === undefined) {
+        const sp = spouseOf[id];
+        if (sp && level[sp] !== undefined) {
+          level[id] = level[sp];
+          changed = true;
+        }
+      }
+    });
+  }
+
+  // Cas restants (personnes isolées)
+  Object.keys(P).forEach(id => {
+    if (level[id] === undefined) level[id] = 0;
   });
 
-  // ── 4. Grouper par niveau ──────────────────────────────────
+  // S'assurer que les conjoints ont le même niveau
+  // (prend le max des deux)
+  changed = true;
+  iterations = 0;
+  while (changed && iterations < 10) {
+    changed = false;
+    Object.keys(P).forEach(id => {
+      const sp = spouseOf[id];
+      if (sp !== undefined && level[sp] !== undefined && level[id] !== level[sp]) {
+        const maxLv = Math.max(level[id], level[sp]);
+        level[id] = maxLv;
+        level[sp] = maxLv;
+        changed = true;
+      }
+    });
+  }
+
+  // ── Grouper par niveau ────────────────────────────────────
   const byLevel = {};
   Object.keys(level).forEach(id => {
     const lv = level[id];
     if (!byLevel[lv]) byLevel[lv] = [];
-    byLevel[lv].push(id);
+    if (!byLevel[lv].includes(id)) byLevel[lv].push(id);
   });
 
-  // ── 5. Construire les colonnes de chaque niveau ────────────
-  // On crée des "slots" : un slot = [id] ou [id_a, id_b] pour un couple
-  // Règle : un couple occupe 2 cases côte à côte
-  const slots = {}; // level → array of slots
-  Object.keys(byLevel).forEach(lv => {
+  // ── Construire les slots (groupes couple ou solo) ─────────
+  // Un slot couple = [idA, idB] côte à côte
+  const couplesDone = new Set();
+  const slotsByLevel = {};
+
+  Object.keys(byLevel).sort((a,b) => a-b).forEach(lv => {
     const ids = byLevel[lv];
-    const used = new Set();
-    const arr = [];
+    const slots = [];
+    const used  = new Set();
+
     ids.forEach(id => {
       if (used.has(id)) return;
-      const sp = coupleOf[id];
+      const sp = spouseOf[id];
       if (sp && ids.includes(sp) && !used.has(sp)) {
-        arr.push([id, sp]);
+        slots.push([id, sp]);
         used.add(id); used.add(sp);
-      } else if (!sp || !ids.includes(sp)) {
-        arr.push([id]);
+        couplesDone.add(id + "_" + sp);
+        couplesDone.add(sp + "_" + id);
+      } else {
+        slots.push([id]);
         used.add(id);
       }
     });
-    slots[lv] = arr;
+
+    slotsByLevel[lv] = slots;
   });
 
-  // ── 6. Calculer les positions X/Y ─────────────────────────
-  const pos = {}; // id → {x, y}
-  const sortedLevels = Object.keys(slots).map(Number).sort((a, b) => a - b);
+  // ── Positionner les nœuds ─────────────────────────────────
+  const pos = {};
 
-  sortedLevels.forEach(lv => {
-    const y = 30 + lv * (NH + VGAP);
+  Object.keys(slotsByLevel).sort((a,b) => a-b).forEach(lv => {
+    const slots = slotsByLevel[lv];
+    const y = 30 + Number(lv) * (NH + VGAP);
     let x = 30;
-    slots[lv].forEach(slot => {
+
+    slots.forEach(slot => {
       if (slot.length === 2) {
         pos[slot[0]] = { x, y };
         pos[slot[1]] = { x: x + NW + CGAP, y };
@@ -157,7 +178,7 @@ function render() {
     });
   });
 
-  // ── 7. Canvas ─────────────────────────────────────────────
+  // ── Canvas ────────────────────────────────────────────────
   let maxX = 0, maxY = 0;
   Object.values(pos).forEach(p => {
     if (p.x + NW > maxX) maxX = p.x + NW;
@@ -171,124 +192,143 @@ function render() {
   svg.setAttribute("width",  maxX + 60);
   svg.setAttribute("height", maxY + 60);
 
-  // ── 8. Dessiner les lignes ─────────────────────────────────
+  // ── Lignes SVG ────────────────────────────────────────────
   let lines = "";
-  const S  = `stroke="#c0c0c8" stroke-width="1.5" fill="none"`;
-  const SD = `stroke="#aaaacc" stroke-width="1.5" stroke-dasharray="5,4" fill="none"`;
+  const LS  = `stroke="#c0c0c8" stroke-width="1.5" fill="none"`;
+  const LSD = `stroke="#aaaacc" stroke-width="1.5" stroke-dasharray="5,4" fill="none"`;
 
-  // Lignes de couple (pointillé horizontal)
-  coupleUnits.forEach(({ a, b }) => {
-    const pa = pos[a], pb = pos[b];
-    if (!pa || !pb) return;
-    const y = pa.y + NH / 2;
-    lines += `<line x1="${pa.x + NW}" y1="${y}" x2="${pb.x}" y2="${y}" ${SD}/>`;
-  });
+  // Couples déjà dessinés pour les lignes
+  const drawnCouple = new Set();
 
-  // Lignes parent → enfant
-  // Pour chaque couple, on calcule le midpoint et on descend vers les enfants communs
-  const drawnParentChild = new Set();
-
-  coupleUnits.forEach(({ a, b }) => {
-    const pa = pos[a], pb = pos[b];
-    if (!pa || !pb) return;
-
-    // Enfants communs = enfants de a ET de b
-    const setA = new Set(childrenOf[a]);
-    const setB = new Set(childrenOf[b]);
-    const common = [...setA].filter(id => setB.has(id));
-    common.forEach(id => drawnParentChild.add(id));
-
-    if (common.length === 0) return;
-
-    const midX = pa.x + NW + CGAP / 2; // milieu du gap entre conjoints
-    const topY = pa.y + NH;
-    const midY = topY + VGAP / 2;
-
-    // Descente depuis le couple
-    lines += `<line x1="${midX}" y1="${pa.y + NH / 2}" x2="${midX}" y2="${midY}" ${S}/>`;
-
-    // Positions des enfants
-    const cxs = common.map(id => pos[id] ? pos[id].x + NW / 2 : null).filter(Boolean);
-    if (cxs.length === 0) return;
-
-    const minCX = Math.min(...cxs);
-    const maxCX = Math.max(...cxs);
-
-    // Barre horizontale
-    if (cxs.length > 1) {
-      lines += `<line x1="${minCX}" y1="${midY}" x2="${maxCX}" y2="${midY}" ${S}/>`;
+  Object.keys(P).forEach(id => {
+    const sp = spouseOf[id];
+    const key = [id, sp].sort().join("_");
+    if (sp && !drawnCouple.has(key)) {
+      drawnCouple.add(key);
+      const pa = pos[id], pb = pos[sp];
+      if (pa && pb) {
+        // Ligne pointillée horizontale entre conjoints
+        const leftP  = pa.x < pb.x ? pa : pb;
+        const rightP = pa.x < pb.x ? pb : pa;
+        const y = leftP.y + NH / 2;
+        lines += `<line x1="${leftP.x + NW}" y1="${y}" x2="${rightP.x}" y2="${y}" ${LSD}/>`;
+      }
     }
-    // Connexion milieu couple → barre
-    const clampedMid = Math.max(minCX, Math.min(maxCX, midX));
-    lines += `<line x1="${midX}" y1="${midY}" x2="${clampedMid}" y2="${midY}" ${S}/>`;
-
-    // Descente vers chaque enfant
-    cxs.forEach((cx, i) => {
-      const child = pos[common[i]];
-      if (child) lines += `<line x1="${cx}" y1="${midY}" x2="${cx}" y2="${child.y}" ${S}/>`;
-    });
   });
 
-  // Enfants d'un parent seul (sans conjoint connu dans l'arbre)
-  Object.keys(persons).forEach(id => {
-    childrenOf[id].forEach(cid => {
-      if (drawnParentChild.has(cid)) return;
-      const pp = pos[id], cp = pos[cid];
-      if (!pp || !cp) return;
-      drawnParentChild.add(cid);
-      const px = pp.x + NW / 2;
-      const midY = pp.y + NH + VGAP / 2;
-      lines += `<line x1="${px}" y1="${pp.y + NH}" x2="${px}" y2="${midY}" ${S}/>`;
-      lines += `<line x1="${px}" y1="${midY}" x2="${cp.x + NW / 2}" y2="${midY}" ${S}/>`;
-      lines += `<line x1="${cp.x + NW / 2}" y1="${midY}" x2="${cp.x + NW / 2}" y2="${cp.y}" ${S}/>`;
-    });
+  // Liens parents → enfants
+  // Pour chaque enfant, trouve ses parents et dessine les lignes
+  const drawnChild = new Set();
+
+  Object.keys(P).forEach(childId => {
+    if (drawnChild.has(childId)) return;
+    const child = P[childId];
+    const cp    = pos[childId];
+    if (!cp) return;
+
+    const father = child.fatherId && P[child.fatherId] ? child.fatherId : null;
+    const mother = child.motherId && P[child.motherId] ? child.motherId : null;
+
+    if (!father && !mother) return;
+    drawnChild.add(childId);
+
+    const midY = cp.y - VGAP / 2;
+
+    if (father && mother) {
+      // Les deux parents connus → descend depuis le milieu du couple
+      const fp = pos[father], mp = pos[mother];
+      if (!fp || !mp) return;
+
+      const leftP  = fp.x < mp.x ? fp : mp;
+      const rightP = fp.x < mp.x ? mp : fp;
+      const coupleY = leftP.y + NH / 2;
+      const midX    = leftP.x + NW + CGAP / 2;
+
+      // Trouve tous les enfants communs de ce couple
+      const siblings = Object.keys(P).filter(sid => {
+        const s = P[sid];
+        return ((s.fatherId === father && s.motherId === mother) ||
+                (s.fatherId === mother && s.motherId === father));
+      });
+
+      const sibKey = [father, mother].sort().join("_");
+      if (drawnChild.has("couple_" + sibKey)) return;
+      drawnChild.add("couple_" + sibKey);
+      siblings.forEach(s => drawnChild.add(s));
+
+      // Ligne verticale depuis milieu couple vers le bas
+      lines += `<line x1="${midX}" y1="${coupleY}" x2="${midX}" y2="${midY}" ${LS}/>`;
+
+      const sibPositions = siblings.map(sid => pos[sid]).filter(Boolean);
+      if (sibPositions.length === 0) return;
+
+      const xs = sibPositions.map(p => p.x + NW / 2);
+      const minX = Math.min(...xs, midX);
+      const maxX = Math.max(...xs, midX);
+
+      // Barre horizontale
+      lines += `<line x1="${minX}" y1="${midY}" x2="${maxX}" y2="${midY}" ${LS}/>`;
+
+      // Descente vers chaque enfant
+      xs.forEach(cx => {
+        const sib = sibPositions[xs.indexOf(cx)];
+        lines += `<line x1="${cx}" y1="${midY}" x2="${cx}" y2="${sib.y}" ${LS}/>`;
+      });
+
+    } else {
+      // Un seul parent connu
+      const parentId = father || mother;
+      const pp = pos[parentId];
+      if (!pp) return;
+
+      const px   = pp.x + NW / 2;
+      const cx   = cp.x + NW / 2;
+      lines += `<line x1="${px}" y1="${pp.y + NH}" x2="${px}" y2="${midY}" ${LS}/>`;
+      lines += `<line x1="${px}" y1="${midY}" x2="${cx}" y2="${midY}" ${LS}/>`;
+      lines += `<line x1="${cx}" y1="${midY}" x2="${cx}" y2="${cp.y}" ${LS}/>`;
+    }
   });
 
   svg.innerHTML = lines;
 
-  // ── 9. Dessiner les nœuds ─────────────────────────────────
-  Object.keys(persons).forEach(id => {
-    const p = persons[id];
+  // ── Nœuds HTML ────────────────────────────────────────────
+  Object.keys(P).forEach(id => {
+    const p  = P[id];
     const pt = pos[id];
     if (!pt) return;
 
     const node = document.createElement("a");
-    node.href = "person.html?id=" + id;
+    node.href  = "person.html?id=" + id;
     node.className = "node" + (p.deathDate ? " deceased" : "");
-    node.style.cssText = `left:${pt.x}px;top:${pt.y}px;width:${NW}px;min-height:${NH}px`;
+    node.style.cssText = `left:${pt.x}px;top:${pt.y}px;width:${NW}px;min-height:${NH}px;`;
 
     // Photo
-    let photoHTML = "";
-    if (p.photoURL) {
-      photoHTML = `<div class="node-photo" style="background-image:url('${p.photoURL}')"></div>`;
-    }
+    const photoHTML = p.photoURL
+      ? `<div class="node-photo" style="background-image:url('${p.photoURL}')"></div>`
+      : "";
 
-    // Dates ou âge
-    let infoLine = "";
+    // Info ligne : âge si vivant, années si décédé
+    let info = "";
     if (p.birthDate) {
       if (!p.deathDate) {
-        const age = computeAge(p.birthDate);
-        infoLine = `${age} ans`;
+        info = computeAge(p.birthDate) + " ans";
       } else {
-        const by = p.birthDate.split("-")[0];
-        const dy = p.deathDate.split("-")[0];
-        infoLine = `${by} – ${dy}`;
+        info = p.birthDate.split("-")[0] + " – " + p.deathDate.split("-")[0];
       }
     }
 
-    const nickname = p.nickname ? `<div class="node-nick">"${p.nickname}"</div>` : "";
+    const nick = p.nickname ? `<div class="node-nick">"${p.nickname}"</div>` : "";
 
     node.innerHTML = `
       ${photoHTML}
       <div class="node-name">${p.firstName || ""} ${p.lastName || ""}</div>
-      ${nickname}
-      ${infoLine ? `<div class="node-dates">${infoLine}</div>` : ""}
+      ${nick}
+      ${info ? `<div class="node-dates">${info}</div>` : ""}
     `;
 
     canvas.appendChild(node);
   });
 
-  // Afficher
   document.getElementById("loadingMsg").style.display = "none";
   canvas.style.display = "block";
 }
@@ -297,7 +337,11 @@ function computeAge(birthDate) {
   const today = new Date();
   const birth = new Date(birthDate);
   let age = today.getFullYear() - birth.getFullYear();
-  const m = today.getMonth() - birth.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+  if (today.getMonth() < birth.getMonth() ||
+     (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) age--;
   return age;
+}
+
+function msg(text) {
+  document.getElementById("loadingMsg").textContent = text;
 }
