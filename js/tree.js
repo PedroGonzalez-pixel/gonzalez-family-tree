@@ -1,325 +1,339 @@
-const NW = 156;
-const NH = 80;
-const HPAD = 24;
-const VPAD = 90;
+// ============================================================
+// ARBRE GÉNÉALOGIQUE — approche correcte
+//
+// Stratégie :
+// 1. Créer des "nœuds familles" virtuels pour chaque couple
+// 2. Utiliser d3.tree() sur cette structure
+// 3. Les conjoints se partagent un nœud famille commun
+// ============================================================
 
-function realId(val) {
-  return val && typeof val === "string" && val.trim() !== "" ? val : null;
+const NW = 150;
+const NH = 78;
+
+function v(val) {
+  return val && typeof val === "string" && val.trim() ? val : null;
 }
 
-firebase.auth().onAuthStateChanged(async function(user) {
-  if (!user) return;
-  await buildTree();
-});
+function age(d) {
+  const t = new Date(), b = new Date(d);
+  let a = t.getFullYear() - b.getFullYear();
+  if (t.getMonth() < b.getMonth() || (t.getMonth() === b.getMonth() && t.getDate() < b.getDate())) a--;
+  return a;
+}
 
-async function buildTree() {
+firebase.auth().onAuthStateChanged(async user => {
+  if (!user) return;
   try {
     const snap = await db.collection("persons").get();
-    if (snap.empty) {
-      document.getElementById("loadingMsg").textContent = "Aucune personne enregistrée.";
-      return;
-    }
-    const persons = {};
+    if (snap.empty) { document.getElementById("loadingMsg").textContent = "Aucune personne."; return; }
+    const raw = {};
     snap.forEach(d => {
-      const data = d.data();
-      persons[d.id] = {
-        id: d.id,
-        firstName: data.firstName || "",
-        lastName:  data.lastName  || "",
-        nickname:  realId(data.nickname),
-        birthDate: realId(data.birthDate),
-        deathDate: realId(data.deathDate),
-        fatherId:  realId(data.fatherId),
-        motherId:  realId(data.motherId),
-        spouseId:  realId(data.spouseId),
-        photoURL:  realId(data.photoURL),
-      };
+      const x = d.data();
+      raw[d.id] = { id: d.id, firstName: x.firstName||"", lastName: x.lastName||"",
+        nickname: v(x.nickname), birthDate: v(x.birthDate), deathDate: v(x.deathDate),
+        fatherId: v(x.fatherId), motherId: v(x.motherId), spouseId: v(x.spouseId), photoURL: v(x.photoURL) };
     });
     document.getElementById("loadingMsg").style.display = "none";
-    drawTree(persons);
-  } catch (e) {
+    draw(raw);
+  } catch(e) {
     document.getElementById("loadingMsg").textContent = "Erreur : " + e.message;
   }
-}
+});
 
-function drawTree(persons) {
-  const ids = Object.keys(persons);
+function draw(P) {
+  const ids = Object.keys(P);
 
-  // ── 1. Niveaux ────────────────────────────────────────────
-  const level = {};
+  // ── Étape 1 : calculer les niveaux (générations) ──────────
+  const gen = {};
 
+  // Racines = pas de parents valides dans P
   ids.forEach(id => {
-    const p = persons[id];
-    if (!p.fatherId && !p.motherId) level[id] = 0;
+    const p = P[id];
+    if (!(p.fatherId && P[p.fatherId]) && !(p.motherId && P[p.motherId])) gen[id] = 0;
   });
 
-  for (let i = 0; i < 30; i++) {
+  // Descendre
+  for (let i = 0; i < 20; i++) {
     ids.forEach(id => {
-      if (level[id] !== undefined) return;
-      const p   = persons[id];
-      const fLv = p.fatherId && persons[p.fatherId] ? level[p.fatherId] : undefined;
-      const mLv = p.motherId && persons[p.motherId] ? level[p.motherId] : undefined;
-      if (fLv !== undefined && mLv !== undefined) level[id] = Math.max(fLv, mLv) + 1;
-      else if (fLv !== undefined)                 level[id] = fLv + 1;
-      else if (mLv !== undefined)                 level[id] = mLv + 1;
+      if (gen[id] !== undefined) return;
+      const p = P[id];
+      const fg = p.fatherId && P[p.fatherId] ? gen[p.fatherId] : null;
+      const mg = p.motherId && P[p.motherId] ? gen[p.motherId] : null;
+      if (fg !== null && fg !== undefined && mg !== null && mg !== undefined) gen[id] = Math.max(fg, mg) + 1;
+      else if (fg !== null && fg !== undefined) gen[id] = fg + 1;
+      else if (mg !== null && mg !== undefined) gen[id] = mg + 1;
     });
   }
 
-  // Conjoints sans parents → même niveau
+  // Conjoints sans parents → même génération
   for (let i = 0; i < 10; i++) {
     ids.forEach(id => {
-      if (level[id] !== undefined) return;
-      const sp = persons[id].spouseId;
-      if (sp && persons[sp] && level[sp] !== undefined) level[id] = level[sp];
+      if (gen[id] !== undefined) return;
+      const sp = P[id].spouseId;
+      if (sp && P[sp] && gen[sp] !== undefined) gen[id] = gen[sp];
     });
   }
 
-  // Forcer conjoints même niveau
+  // Aligner conjoints
   for (let i = 0; i < 10; i++) {
     ids.forEach(id => {
-      const sp = persons[id].spouseId;
-      if (!sp || !persons[sp]) return;
-      if (level[id] !== undefined && level[sp] !== undefined && level[id] !== level[sp]) {
-        const m = Math.max(level[id], level[sp]);
-        level[id] = m; level[sp] = m;
+      const sp = P[id].spouseId;
+      if (!sp || !P[sp]) return;
+      if (gen[id] !== undefined && gen[sp] !== undefined && gen[id] !== gen[sp]) {
+        const m = Math.max(gen[id], gen[sp]);
+        gen[id] = gen[sp] = m;
       }
     });
   }
 
-  ids.forEach(id => { if (level[id] === undefined) level[id] = 0; });
+  ids.forEach(id => { if (gen[id] === undefined) gen[id] = 0; });
 
-  // ── 2. Grouper par niveau ─────────────────────────────────
-  const byLevel = {};
+  // ── Étape 2 : grouper par génération et créer les slots ───
+  const byGen = {};
   ids.forEach(id => {
-    const lv = level[id];
-    if (!byLevel[lv]) byLevel[lv] = [];
-    if (!byLevel[lv].includes(id)) byLevel[lv].push(id);
+    const g = gen[id];
+    if (!byGen[g]) byGen[g] = [];
+    if (!byGen[g].includes(id)) byGen[g].push(id);
   });
 
-  // ── 3. Positions ──────────────────────────────────────────
+  // Couples (paire d'IDs)
+  const spousePairs = new Set();
   const spouseOf = {};
   ids.forEach(id => {
-    const sp = persons[id].spouseId;
-    if (sp && persons[sp]) spouseOf[id] = sp;
+    const sp = P[id].spouseId;
+    if (sp && P[sp]) {
+      spouseOf[id] = sp;
+      const key = [id,sp].sort().join("|");
+      spousePairs.add(key);
+    }
   });
 
-  const spouseLinks = [];
-  const spousePairs = new Set();
-  const pos = {};
+  // Slots ordonnés par génération
+  // Un slot = { ids: [id] ou [id, spouseId], x, y }
+  const slots = {}; // genLevel → array of slot
+  const slotOf = {}; // personId → slot
 
-  Object.keys(byLevel).sort((a, b) => +a - +b).forEach(lv => {
-    const lvIds = byLevel[lv];
-    const used  = new Set();
-    const slots = [];
+  const HGAP = 30;
+  const VGAP = 100;
+  const CGAP = 10; // gap entre conjoints
+
+  Object.keys(byGen).sort((a,b)=>+a-+b).forEach(g => {
+    const lvIds = byGen[g];
+    const used = new Set();
+    const lvSlots = [];
 
     lvIds.forEach(id => {
       if (used.has(id)) return;
       const sp = spouseOf[id];
       if (sp && lvIds.includes(sp) && !used.has(sp)) {
-        slots.push([id, sp]);
+        const s = { ids: [id, sp], g: +g };
+        lvSlots.push(s);
+        slotOf[id] = s; slotOf[sp] = s;
         used.add(id); used.add(sp);
-        const key = [id, sp].sort().join("~");
-        if (!spousePairs.has(key)) {
-          spousePairs.add(key);
-          spouseLinks.push({ a: id, b: sp });
-        }
       } else {
-        slots.push([id]);
+        const s = { ids: [id], g: +g };
+        lvSlots.push(s);
+        slotOf[id] = s;
         used.add(id);
       }
     });
 
-    let totalW = 0;
-    slots.forEach(s => { totalW += s.length * NW + (s.length - 1) * 8; });
-    totalW += (slots.length - 1) * HPAD;
+    slots[g] = lvSlots;
+  });
 
-    let x = -totalW / 2;
-    const y = +lv * (NH + VPAD);
-    slots.forEach(slot => {
-      if (slot.length === 2) {
-        pos[slot[0]] = { x, y };
-        pos[slot[1]] = { x: x + NW + 8, y };
-        x += NW * 2 + 8 + HPAD;
-      } else {
-        pos[slot[0]] = { x, y };
-        x += NW + HPAD;
-      }
+  // Calculer largeurs des slots
+  slots_width = {};
+  Object.keys(slots).forEach(g => {
+    slots[g].forEach(s => {
+      s.w = s.ids.length === 2 ? NW * 2 + CGAP : NW;
     });
   });
 
-  // ── 4. Familles ───────────────────────────────────────────
+  // Positionner les slots : centrer chaque génération
+  // D'abord calculer largeur totale de chaque gen
+  const pos = {}; // personId → {x, y, cx} cx = centre du slot
+
+  Object.keys(slots).sort((a,b)=>+a-+b).forEach(g => {
+    const lvSlots = slots[g];
+    let totalW = lvSlots.reduce((acc, s) => acc + s.w, 0) + (lvSlots.length - 1) * HGAP;
+    let x = -totalW / 2;
+    const y = +g * (NH + VGAP);
+
+    lvSlots.forEach(s => {
+      s.x = x;
+      s.y = y;
+      s.cx = x + s.w / 2; // centre du slot
+
+      if (s.ids.length === 2) {
+        pos[s.ids[0]] = { x, y, cx: x + NW / 2 };
+        pos[s.ids[1]] = { x: x + NW + CGAP, y, cx: x + NW + CGAP + NW / 2 };
+      } else {
+        pos[s.ids[0]] = { x, y, cx: x + NW / 2 };
+      }
+
+      x += s.w + HGAP;
+    });
+  });
+
+  // ── Étape 3 : familles ────────────────────────────────────
+  // Regrouper les enfants par (fatherId, motherId) exact
   const families = {};
   ids.forEach(id => {
-    const p   = persons[id];
-    const fid = p.fatherId && persons[p.fatherId] ? p.fatherId : null;
-    const mid = p.motherId && persons[p.motherId] ? p.motherId : null;
+    const p = P[id];
+    const fid = p.fatherId && P[p.fatherId] ? p.fatherId : null;
+    const mid = p.motherId && P[p.motherId] ? p.motherId : null;
     if (!fid && !mid) return;
-    const key = (fid || "X") + "|" + (mid || "X");
-    if (!families[key]) families[key] = { fatherId: fid, motherId: mid, children: [] };
+    // Clé basée sur les IDs réels, pas triés
+    const key = (fid||"_") + "##" + (mid||"_");
+    if (!families[key]) families[key] = { fid, mid, children: [] };
     families[key].children.push(id);
   });
 
-  // ── 5. SVG D3 ─────────────────────────────────────────────
+  // ── Étape 4 : SVG ─────────────────────────────────────────
   const wrapper = document.getElementById("tree-wrapper");
-  const W = wrapper.clientWidth  || window.innerWidth;
-  const H = wrapper.clientHeight || window.innerHeight - 56;
+  const W = wrapper.clientWidth  || 1200;
+  const H = wrapper.clientHeight || 700;
 
-  const svg = d3.select("#tree-wrapper")
-    .append("svg")
+  d3.select("#tree-wrapper").select("svg").remove();
+
+  const svg = d3.select("#tree-wrapper").append("svg")
     .attr("width", W).attr("height", H);
 
   const g = svg.append("g");
-  const zoom = d3.zoom().scaleExtent([0.2, 3])
-    .on("zoom", e => g.attr("transform", e.transform));
-  svg.call(zoom);
-  svg.call(zoom.transform, d3.zoomIdentity.translate(W / 2, 40));
 
-  // ── 6. Liens conjoints ────────────────────────────────────
-  spouseLinks.forEach(({ a, b }) => {
-    const pa = pos[a], pb = pos[b];
+  svg.call(d3.zoom().scaleExtent([0.15, 3])
+    .on("zoom", e => g.attr("transform", e.transform)));
+  svg.call(d3.zoom().transform, d3.zoomIdentity.translate(W/2, 40).scale(1));
+
+  // Reset transform après init
+  g.attr("transform", `translate(${W/2},40)`);
+
+  // ── Liens conjoints ───────────────────────────────────────
+  const drawnSpouse = new Set();
+  ids.forEach(id => {
+    const sp = spouseOf[id];
+    if (!sp) return;
+    const key = [id,sp].sort().join("|");
+    if (drawnSpouse.has(key)) return;
+    drawnSpouse.add(key);
+    const pa = pos[id], pb = pos[sp];
     if (!pa || !pb) return;
-    const left  = pa.x < pb.x ? pa : pb;
-    const right = pa.x < pb.x ? pb : pa;
-    g.append("line").attr("class", "link-spouse")
-      .attr("x1", left.x + NW).attr("y1", left.y + NH / 2)
-      .attr("x2", right.x)    .attr("y2", right.y + NH / 2);
+    const lx = Math.min(pa.x, pb.x) + NW;
+    const rx = Math.max(pa.x, pb.x);
+    const y  = pa.y + NH / 2;
+    g.append("line").attr("class","link-spouse")
+      .attr("x1",lx).attr("y1",y).attr("x2",rx).attr("y2",y);
   });
 
-  // ── 7. Liens parent → enfant ──────────────────────────────
-  // originX = moyenne des centres des parents (pas forcément adjacents)
-  Object.values(families).forEach(({ fatherId, motherId, children }) => {
-    const pf = fatherId ? pos[fatherId] : null;
-    const pm = motherId ? pos[motherId] : null;
-
+  // ── Liens parent → enfant ─────────────────────────────────
+  Object.values(families).forEach(({ fid, mid, children }) => {
+    const pf = fid ? pos[fid] : null;
+    const pm = mid ? pos[mid] : null;
     if (!pf && !pm) return;
 
-    // Centre X de chaque parent connu
-    const parentCenters = [];
-    if (pf) parentCenters.push(pf.x + NW / 2);
-    if (pm) parentCenters.push(pm.x + NW / 2);
+    // Point de jonction = milieu entre les deux parents (centres)
+    const fCx = pf ? pf.cx : null;
+    const mCx = pm ? pm.cx : null;
 
-    // Origine = moyenne des centres des parents
-    const originX = parentCenters.reduce((a, b) => a + b, 0) / parentCenters.length;
-    // Origine Y = bas du parent le plus bas
-    const parentBottoms = [];
-    if (pf) parentBottoms.push(pf.y + NH);
-    if (pm) parentBottoms.push(pm.y + NH);
-    const originY = Math.max(...parentBottoms);
-
-    const childPos = children.map(cid => pos[cid]).filter(Boolean);
-    if (!childPos.length) return;
-
-    const midY = originY + VPAD / 2;
-
-    // Si deux parents : ligne horizontale entre eux + descente du milieu
-    if (pf && pm) {
-      const leftX  = Math.min(pf.x + NW / 2, pm.x + NW / 2);
-      const rightX = Math.max(pf.x + NW / 2, pm.x + NW / 2);
-
-      // Ligne depuis chaque parent vers le bas jusqu'à midY
-      g.append("line").attr("class", "link")
-        .attr("x1", leftX).attr("y1", originY)
-        .attr("x2", leftX).attr("y2", midY);
-      g.append("line").attr("class", "link")
-        .attr("x1", rightX).attr("y1", originY)
-        .attr("x2", rightX).attr("y2", midY);
-
-      // Ligne horizontale entre les deux parents à midY
-      g.append("line").attr("class", "link")
-        .attr("x1", leftX).attr("y1", midY)
-        .attr("x2", rightX).attr("y2", midY);
+    let junctionX;
+    if (fCx !== null && mCx !== null) {
+      junctionX = (fCx + mCx) / 2;
     } else {
-      // Parent unique : descente simple
-      g.append("line").attr("class", "link")
-        .attr("x1", originX).attr("y1", originY)
-        .attr("x2", originX).attr("y2", midY);
+      junctionX = fCx !== null ? fCx : mCx;
     }
 
-    // Barre horizontale entre les enfants
-    const xs   = childPos.map(p => p.x + NW / 2);
-    const minX = Math.min(...xs, originX);
-    const maxX = Math.max(...xs, originX);
+    const parentY = pf ? pf.y : pm.y;
+    const junctionY = parentY + NH + VGAP * 0.4;
 
-    g.append("line").attr("class", "link")
-      .attr("x1", minX).attr("y1", midY)
-      .attr("x2", maxX).attr("y2", midY);
+    // Ligne depuis chaque parent vers la jonction
+    if (pf) {
+      g.append("path").attr("class","link-parent")
+        .attr("d", `M${pf.cx},${pf.y+NH} L${pf.cx},${junctionY} L${junctionX},${junctionY}`);
+    }
+    if (pm) {
+      g.append("path").attr("class","link-parent")
+        .attr("d", `M${pm.cx},${pm.y+NH} L${pm.cx},${junctionY} L${junctionX},${junctionY}`);
+    }
 
-    // Descente vers chaque enfant
-    childPos.forEach(cp => {
-      g.append("line").attr("class", "link")
-        .attr("x1", cp.x + NW / 2).attr("y1", midY)
-        .attr("x2", cp.x + NW / 2).attr("y2", cp.y);
+    // Depuis la jonction vers chaque enfant
+    const childPositions = children.map(cid => pos[cid]).filter(Boolean);
+    if (!childPositions.length) return;
+
+    const cxs = childPositions.map(cp => cp.cx);
+    const minCx = Math.min(...cxs);
+    const maxCx = Math.max(...cxs);
+
+    // Barre horizontale au niveau de la jonction
+    g.append("line").attr("class","link-parent")
+      .attr("x1", Math.min(junctionX, minCx)).attr("y1", junctionY)
+      .attr("x2", Math.max(junctionX, maxCx)).attr("y2", junctionY);
+
+    childPositions.forEach(cp => {
+      g.append("line").attr("class","link-parent")
+        .attr("x1", cp.cx).attr("y1", junctionY)
+        .attr("x2", cp.cx).attr("y2", cp.y);
     });
   });
 
-  // ── 8. Nœuds ─────────────────────────────────────────────
+  // ── Nœuds ─────────────────────────────────────────────────
   ids.forEach(id => {
-    const p  = persons[id];
+    const p  = P[id];
     const pt = pos[id];
     if (!pt) return;
 
     const grp = g.append("g")
-      .attr("class", "node-group")
-      .attr("transform", `translate(${pt.x},${pt.y})`)
-      .style("cursor", "pointer")
-      .on("click", () => { window.location.href = "person.html?id=" + id; });
+      .style("cursor","pointer")
+      .on("click", () => window.location.href = "person.html?id=" + id);
 
     grp.append("rect")
-      .attr("class", "node-rect" + (p.deathDate ? " deceased" : ""))
-      .attr("width", NW).attr("height", NH).attr("rx", 12);
+      .attr("class","node-box" + (p.deathDate ? " deceased" : ""))
+      .attr("x", pt.x).attr("y", pt.y)
+      .attr("width", NW).attr("height", NH).attr("rx", 12)
+      .on("mouseenter", function() { d3.select(this).attr("stroke","#0071e3"); })
+      .on("mouseleave", function() { d3.select(this).attr("stroke", p.deathDate ? "#c8c8cc" : "#e0e0e5"); });
 
-    let textY = 24;
+    const cx = pt.x + NW / 2;
+    let ty = pt.y + 22;
+
     if (p.photoURL) {
-      const clipId = "clip-" + id;
+      const clipId = "c" + id;
       grp.append("defs").append("clipPath").attr("id", clipId)
-        .append("circle").attr("cx", NW / 2).attr("cy", 18).attr("r", 13);
+        .append("circle").attr("cx", cx).attr("cy", pt.y + 16).attr("r", 12);
       grp.append("image")
         .attr("href", p.photoURL)
-        .attr("x", NW / 2 - 13).attr("y", 5)
-        .attr("width", 26).attr("height", 26)
+        .attr("x", cx - 12).attr("y", pt.y + 4)
+        .attr("width", 24).attr("height", 24)
         .attr("clip-path", `url(#${clipId})`);
-      textY = 42;
+      ty = pt.y + 38;
     }
 
-    const lines = splitName(p.firstName + " " + p.lastName, 18);
-    lines.forEach((line, i) => {
-      grp.append("text").attr("class", "node-name")
-        .attr("x", NW / 2).attr("y", textY + i * 15)
-        .attr("text-anchor", "middle").text(line);
+    const fullName = (p.firstName + " " + p.lastName).trim();
+    const lines = fullName.length > 18
+      ? [fullName.split(" ").slice(0, Math.ceil(fullName.split(" ").length/2)).join(" "),
+         fullName.split(" ").slice(Math.ceil(fullName.split(" ").length/2)).join(" ")]
+      : [fullName];
+
+    lines.forEach((ln, i) => {
+      grp.append("text").attr("class","node-name-text")
+        .attr("x", cx).attr("y", ty + i * 15)
+        .attr("text-anchor","middle").text(ln);
     });
 
-    let infoY = textY + lines.length * 15 + 3;
+    let iy = ty + lines.length * 15 + 2;
 
     if (p.nickname) {
-      grp.append("text").attr("class", "node-nick")
-        .attr("x", NW / 2).attr("y", infoY)
-        .attr("text-anchor", "middle").text('"' + p.nickname + '"');
-      infoY += 13;
+      grp.append("text").attr("class","node-nick-text")
+        .attr("x", cx).attr("y", iy).attr("text-anchor","middle")
+        .text('"' + p.nickname + '"');
+      iy += 13;
     }
 
     if (p.birthDate) {
       const info = p.deathDate
         ? p.birthDate.split("-")[0] + " – " + p.deathDate.split("-")[0]
-        : computeAge(p.birthDate) + " ans";
-      grp.append("text").attr("class", "node-dates")
-        .attr("x", NW / 2).attr("y", infoY)
-        .attr("text-anchor", "middle").text(info);
+        : age(p.birthDate) + " ans";
+      grp.append("text").attr("class","node-info-text")
+        .attr("x", cx).attr("y", iy).attr("text-anchor","middle").text(info);
     }
   });
-}
-
-function splitName(name, max) {
-  if (name.length <= max) return [name];
-  const parts = name.split(" ");
-  const mid   = Math.ceil(parts.length / 2);
-  return [parts.slice(0, mid).join(" "), parts.slice(mid).join(" ")];
-}
-
-function computeAge(birthDate) {
-  const today = new Date();
-  const birth = new Date(birthDate);
-  let age = today.getFullYear() - birth.getFullYear();
-  if (today.getMonth() < birth.getMonth() ||
-    (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) age--;
-  return age;
 }
