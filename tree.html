@@ -56,35 +56,25 @@
     #tree-wrapper {
       width: 100%; overflow: auto;
       height: calc(100vh - 56px);
-      cursor: grab;
+      cursor: grab; background: var(--bg);
     }
     #tree-wrapper:active { cursor: grabbing; }
-
-    #tree-svg { display: block; }
-
-    /* Nœuds */
-    .node-rect {
-      fill: white;
-      stroke: #e0e0e5;
-      stroke-width: 1.5;
-      rx: 12;
-    }
-    .node-rect.deceased { fill: #f2f2f4; stroke: #c8c8cc; }
-    .node-name { font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; fill: #1d1d1f; }
-    .node-nick { font-family: 'DM Sans', sans-serif; font-size: 11px; font-style: italic; fill: #6e6e73; }
-    .node-dates { font-family: 'DM Sans', sans-serif; font-size: 11px; fill: #6e6e73; }
-
-    /* Liens */
-    .link { fill: none; stroke: #c0c0c8; stroke-width: 1.5; }
-    .link-spouse { fill: none; stroke: #aaaacc; stroke-width: 1.5; stroke-dasharray: 5,4; }
-
-    .node-group { cursor: pointer; }
-    .node-group:hover .node-rect { stroke: #0071e3; }
 
     .loading {
       display: flex; align-items: center; justify-content: center;
       height: calc(100vh - 56px); color: var(--muted); font-size: 15px;
     }
+
+    /* Styles des noeuds SVG */
+    .node-box {
+      fill: white; stroke: #e0e0e5; stroke-width: 1.5;
+    }
+    .node-box.deceased { fill: #f2f2f4; stroke: #c8c8cc; }
+    .node-name-text { font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; fill: #1d1d1f; }
+    .node-info-text { font-family: 'DM Sans', sans-serif; font-size: 11px; fill: #6e6e73; }
+    .node-nick-text { font-family: 'DM Sans', sans-serif; font-size: 11px; font-style: italic; fill: #6e6e73; }
+    .link-parent { fill: none; stroke: #c0c0c8; stroke-width: 1.5; }
+    .link-spouse { fill: none; stroke: #aaaacc; stroke-width: 1.5; stroke-dasharray: 5,4; }
 
     @media (max-width: 600px) {
       .topbar { padding: 0 16px; }
