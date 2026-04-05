@@ -1,14 +1,8 @@
-// ============================================================
-// ARBRE GÉNÉALOGIQUE avec D3.js
-// Fix clé : les champs null de Firestore sont traités correctement
-// ============================================================
-
 const NW = 156;
 const NH = 80;
 const HPAD = 24;
 const VPAD = 90;
 
-// Helper : retourne l'ID seulement si c'est une vraie string non vide
 function realId(val) {
   return val && typeof val === "string" && val.trim() !== "" ? val : null;
 }
@@ -25,12 +19,11 @@ async function buildTree() {
       document.getElementById("loadingMsg").textContent = "Aucune personne enregistrée.";
       return;
     }
-
     const persons = {};
     snap.forEach(d => {
       const data = d.data();
       persons[d.id] = {
-        id:       d.id,
+        id: d.id,
         firstName: data.firstName || "",
         lastName:  data.lastName  || "",
         nickname:  realId(data.nickname),
@@ -40,78 +33,59 @@ async function buildTree() {
         motherId:  realId(data.motherId),
         spouseId:  realId(data.spouseId),
         photoURL:  realId(data.photoURL),
-        notes:     realId(data.notes)
       };
     });
-
     document.getElementById("loadingMsg").style.display = "none";
     drawTree(persons);
-
   } catch (e) {
     document.getElementById("loadingMsg").textContent = "Erreur : " + e.message;
-    console.error(e);
   }
 }
 
 function drawTree(persons) {
   const ids = Object.keys(persons);
 
-  // ── 1. Calcul des niveaux ─────────────────────────────────
+  // ── 1. Niveaux ────────────────────────────────────────────
   const level = {};
 
-  // Racines = fatherId ET motherId sont null/inexistants
   ids.forEach(id => {
     const p = persons[id];
-    const hasFather = p.fatherId && persons[p.fatherId];
-    const hasMother = p.motherId && persons[p.motherId];
-    if (!hasFather && !hasMother) level[id] = 0;
+    if (!p.fatherId && !p.motherId) level[id] = 0;
   });
 
-  // Propager vers les enfants
   for (let i = 0; i < 30; i++) {
     ids.forEach(id => {
       if (level[id] !== undefined) return;
-      const p = persons[id];
-      const hasFather = p.fatherId && persons[p.fatherId];
-      const hasMother = p.motherId && persons[p.motherId];
-      const fLv = hasFather ? level[p.fatherId] : undefined;
-      const mLv = hasMother ? level[p.motherId] : undefined;
-
-      if (hasFather && hasMother && fLv !== undefined && mLv !== undefined) {
-        level[id] = Math.max(fLv, mLv) + 1;
-      } else if (hasFather && !hasMother && fLv !== undefined) {
-        level[id] = fLv + 1;
-      } else if (hasMother && !hasFather && mLv !== undefined) {
-        level[id] = mLv + 1;
-      }
+      const p   = persons[id];
+      const fLv = p.fatherId && persons[p.fatherId] ? level[p.fatherId] : undefined;
+      const mLv = p.motherId && persons[p.motherId] ? level[p.motherId] : undefined;
+      if (fLv !== undefined && mLv !== undefined) level[id] = Math.max(fLv, mLv) + 1;
+      else if (fLv !== undefined)                 level[id] = fLv + 1;
+      else if (mLv !== undefined)                 level[id] = mLv + 1;
     });
   }
 
-  // Conjoints sans parents → même niveau que conjoint
+  // Conjoints sans parents → même niveau
   for (let i = 0; i < 10; i++) {
     ids.forEach(id => {
       if (level[id] !== undefined) return;
       const sp = persons[id].spouseId;
-      if (sp && persons[sp] && level[sp] !== undefined) {
-        level[id] = level[sp];
-      }
+      if (sp && persons[sp] && level[sp] !== undefined) level[id] = level[sp];
     });
   }
 
-  // Forcer conjoints au même niveau
+  // Forcer conjoints même niveau
   for (let i = 0; i < 10; i++) {
     ids.forEach(id => {
       const sp = persons[id].spouseId;
       if (!sp || !persons[sp]) return;
       if (level[id] !== undefined && level[sp] !== undefined && level[id] !== level[sp]) {
         const m = Math.max(level[id], level[sp]);
-        level[id] = m;
-        level[sp] = m;
+        level[id] = m; level[sp] = m;
       }
     });
   }
 
-  // Fallback
   ids.forEach(id => { if (level[id] === undefined) level[id] = 0; });
 
   // ── 2. Grouper par niveau ─────────────────────────────────
@@ -122,7 +96,7 @@ function drawTree(persons) {
     if (!byLevel[lv].includes(id)) byLevel[lv].push(id);
   });
 
-  // ── 3. Couples et positions ───────────────────────────────
+  // ── 3. Positions ──────────────────────────────────────────
   const spouseOf = {};
   ids.forEach(id => {
     const sp = persons[id].spouseId;
@@ -155,14 +129,12 @@ function drawTree(persons) {
       }
     });
 
-    // Largeur totale
     let totalW = 0;
-    slots.forEach(slot => { totalW += slot.length * NW + (slot.length - 1) * 8; });
+    slots.forEach(s => { totalW += s.length * NW + (s.length - 1) * 8; });
     totalW += (slots.length - 1) * HPAD;
 
     let x = -totalW / 2;
     const y = +lv * (NH + VPAD);
-
     slots.forEach(slot => {
       if (slot.length === 2) {
         pos[slot[0]] = { x, y };
@@ -175,7 +147,7 @@ function drawTree(persons) {
     });
   });
 
-  // ── 4. Familles (enfants par parents exacts) ──────────────
+  // ── 4. Familles ───────────────────────────────────────────
   const families = {};
   ids.forEach(id => {
     const p   = persons[id];
@@ -194,16 +166,11 @@ function drawTree(persons) {
 
   const svg = d3.select("#tree-wrapper")
     .append("svg")
-    .attr("id", "tree-svg")
-    .attr("width",  W)
-    .attr("height", H);
+    .attr("width", W).attr("height", H);
 
   const g = svg.append("g");
-
-  const zoom = d3.zoom()
-    .scaleExtent([0.2, 3])
-    .on("zoom", event => g.attr("transform", event.transform));
-
+  const zoom = d3.zoom().scaleExtent([0.2, 3])
+    .on("zoom", e => g.attr("transform", e.transform));
   svg.call(zoom);
   svg.call(zoom.transform, d3.zoomIdentity.translate(W / 2, 40));
 
@@ -213,38 +180,62 @@ function drawTree(persons) {
     if (!pa || !pb) return;
     const left  = pa.x < pb.x ? pa : pb;
     const right = pa.x < pb.x ? pb : pa;
-    g.append("line")
-      .attr("class", "link-spouse")
+    g.append("line").attr("class", "link-spouse")
       .attr("x1", left.x + NW).attr("y1", left.y + NH / 2)
       .attr("x2", right.x)    .attr("y2", right.y + NH / 2);
   });
 
   // ── 7. Liens parent → enfant ──────────────────────────────
+  // originX = moyenne des centres des parents (pas forcément adjacents)
   Object.values(families).forEach(({ fatherId, motherId, children }) => {
-    let originX, originY;
+    const pf = fatherId ? pos[fatherId] : null;
+    const pm = motherId ? pos[motherId] : null;
 
-    if (fatherId && motherId) {
-      const pf = pos[fatherId], pm = pos[motherId];
-      if (!pf || !pm) return;
-      const left = pf.x < pm.x ? pf : pm;
-      originX = left.x + NW + 4;
-      originY = left.y + NH / 2;
-    } else {
-      const pp = pos[fatherId || motherId];
-      if (!pp) return;
-      originX = pp.x + NW / 2;
-      originY = pp.y + NH;
-    }
+    if (!pf && !pm) return;
+
+    // Centre X de chaque parent connu
+    const parentCenters = [];
+    if (pf) parentCenters.push(pf.x + NW / 2);
+    if (pm) parentCenters.push(pm.x + NW / 2);
+
+    // Origine = moyenne des centres des parents
+    const originX = parentCenters.reduce((a, b) => a + b, 0) / parentCenters.length;
+    // Origine Y = bas du parent le plus bas
+    const parentBottoms = [];
+    if (pf) parentBottoms.push(pf.y + NH);
+    if (pm) parentBottoms.push(pm.y + NH);
+    const originY = Math.max(...parentBottoms);
 
     const childPos = children.map(cid => pos[cid]).filter(Boolean);
     if (!childPos.length) return;
 
-    const midY = childPos[0].y - VPAD / 2;
+    const midY = originY + VPAD / 2;
 
-    g.append("line").attr("class", "link")
-      .attr("x1", originX).attr("y1", originY)
-      .attr("x2", originX).attr("y2", midY);
+    // Si deux parents : ligne horizontale entre eux + descente du milieu
+    if (pf && pm) {
+      const leftX  = Math.min(pf.x + NW / 2, pm.x + NW / 2);
+      const rightX = Math.max(pf.x + NW / 2, pm.x + NW / 2);
 
+      // Ligne depuis chaque parent vers le bas jusqu'à midY
+      g.append("line").attr("class", "link")
+        .attr("x1", leftX).attr("y1", originY)
+        .attr("x2", leftX).attr("y2", midY);
+      g.append("line").attr("class", "link")
+        .attr("x1", rightX).attr("y1", originY)
+        .attr("x2", rightX).attr("y2", midY);
+
+      // Ligne horizontale entre les deux parents à midY
+      g.append("line").attr("class", "link")
+        .attr("x1", leftX).attr("y1", midY)
+        .attr("x2", rightX).attr("y2", midY);
+    } else {
+      // Parent unique : descente simple
+      g.append("line").attr("class", "link")
+        .attr("x1", originX).attr("y1", originY)
+        .attr("x2", originX).attr("y2", midY);
+    }
+
+    // Barre horizontale entre les enfants
     const xs   = childPos.map(p => p.x + NW / 2);
     const minX = Math.min(...xs, originX);
     const maxX = Math.max(...xs, originX);
@@ -253,6 +244,7 @@ function drawTree(persons) {
       .attr("x1", minX).attr("y1", midY)
       .attr("x2", maxX).attr("y2", midY);
 
+    // Descente vers chaque enfant
     childPos.forEach(cp => {
       g.append("line").attr("class", "link")
         .attr("x1", cp.x + NW / 2).attr("y1", midY)
@@ -276,7 +268,6 @@ function drawTree(persons) {
       .attr("class", "node-rect" + (p.deathDate ? " deceased" : ""))
       .attr("width", NW).attr("height", NH).attr("rx", 12);
 
-    // Photo
     let textY = 24;
     if (p.photoURL) {
       const clipId = "clip-" + id;
@@ -290,9 +281,7 @@ function drawTree(persons) {
       textY = 42;
     }
 
-    const fullName = p.firstName + " " + p.lastName;
-    const lines    = splitName(fullName, 18);
-
+    const lines = splitName(p.firstName + " " + p.lastName, 18);
     lines.forEach((line, i) => {
       grp.append("text").attr("class", "node-name")
         .attr("x", NW / 2).attr("y", textY + i * 15)
