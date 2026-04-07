@@ -1,9 +1,8 @@
 // ============================================================
-// TREE.JS — ARBRE GÉNÉALOGIQUE
-// Version affichée dans le SVG (haut gauche)
+// TREE.JS — Arbre généalogique (version finale stable)
 // ============================================================
 
-const TREE_VERSION = "1.0.0";
+const TREE_VERSION = "1.0.1";
 
 // ------------------ Helpers ------------------
 
@@ -37,10 +36,10 @@ const VGAP = 96;
 // Firestore load
 // ============================================================
 
-firebase.auth().onAuthStateChanged(async user => {
+firebase.auth().onAuthStateChanged(async user=>{
   if(!user) return;
 
-  try {
+  try{
     const snap = await db.collection("persons").get();
     if(snap.empty){
       document.getElementById("loadingMsg").textContent = "Aucune personne.";
@@ -68,7 +67,7 @@ firebase.auth().onAuthStateChanged(async user => {
 
     drawTree(P);
 
-  } catch(e){
+  }catch(e){
     console.error(e);
     document.getElementById("loadingMsg").textContent = "Erreur : " + e.message;
   }
@@ -83,7 +82,7 @@ function drawTree(P){
   const ids = Object.keys(P);
 
   // ──────────────────────────────────────────────────────────
-  // 1. GÉNÉRATIONS (DFS — parents → enfants uniquement)
+  // 1. GÉNÉRATIONS — calcul strict par les parents (DFS)
   // ──────────────────────────────────────────────────────────
 
   const gen = {};
@@ -97,7 +96,6 @@ function drawTree(P){
     }
 
     visiting.add(id);
-
     const p = P[id];
     let g = 0;
 
@@ -112,7 +110,28 @@ function drawTree(P){
   ids.forEach(id => computeGen(id));
 
   // ──────────────────────────────────────────────────────────
-  // 2. FAMILLES (père + mère → enfants)
+  // ✅ PATCH CRITIQUE : conjoints sans parents
+  // Un conjoint SANS parents hérite du niveau de l’autre
+  // ──────────────────────────────────────────────────────────
+
+  ids.forEach(id=>{
+    const p = P[id];
+    if(!p.sid || !P[p.sid]) return;
+
+    const sp = P[p.sid];
+    const hasParents = p.fid || p.mid;
+    const spHasParents = sp.fid || sp.mid;
+
+    if(!hasParents && gen[id] !== gen[p.sid]){
+      gen[id] = gen[p.sid];
+    }
+    if(!spHasParents && gen[p.sid] !== gen[id]){
+      gen[p.sid] = gen[id];
+    }
+  });
+
+  // ──────────────────────────────────────────────────────────
+  // 2. FAMILLES
   // ──────────────────────────────────────────────────────────
 
   const families = {};
@@ -132,9 +151,7 @@ function drawTree(P){
 
   const byGen = {};
   ids.forEach(id=>{
-    const g = gen[id];
-    if(!byGen[g]) byGen[g] = [];
-    byGen[g].push(id);
+    (byGen[gen[id]] ??= []).push(id);
   });
 
   const spouseOf = {};
@@ -144,29 +161,29 @@ function drawTree(P){
 
   const slotsByGen = {};
   const spouseLinks = [];
-  const seenSpouses = new Set();
-
+  const usedSpouses = new Set();
   const generations = Object.keys(byGen).map(Number).sort((a,b)=>a-b);
 
   generations.forEach(level=>{
-    const idsAtLevel = [...byGen[level]];
+    const levelIds = [...byGen[level]];
     const used = new Set();
     const slots = [];
 
-    idsAtLevel.forEach(id=>{
+    levelIds.forEach(id=>{
       if(used.has(id)) return;
+
       const sp = spouseOf[id];
-
-      if(sp && idsAtLevel.includes(sp) && !used.has(sp)){
+      if(sp && levelIds.includes(sp) && !used.has(sp)){
         slots.push([id, sp]);
-        used.add(id); used.add(sp);
+        used.add(id);
+        used.add(sp);
 
-        const key = [id,sp].sort().join("~");
-        if(!seenSpouses.has(key)){
-          seenSpouses.add(key);
+        const k = [id,sp].sort().join("~");
+        if(!usedSpouses.has(k)){
+          usedSpouses.add(k);
           spouseLinks.push([id,sp]);
         }
-      } else {
+      }else{
         slots.push([id]);
         used.add(id);
       }
@@ -183,9 +200,9 @@ function drawTree(P){
 
   generations.forEach(level=>{
     const slots = slotsByGen[level];
-
     let totalW = 0;
-    slots.forEach(s => {
+
+    slots.forEach(s=>{
       totalW += (s.length === 2 ? NW*2 + CGAP : NW);
     });
     totalW += (slots.length - 1) * HGAP;
@@ -198,7 +215,7 @@ function drawTree(P){
         pos[s[0]] = { x, y };
         pos[s[1]] = { x: x + NW + CGAP, y };
         x += NW*2 + CGAP + HGAP;
-      } else {
+      }else{
         pos[s[0]] = { x, y };
         x += NW + HGAP;
       }
@@ -206,7 +223,7 @@ function drawTree(P){
   });
 
   // ──────────────────────────────────────────────────────────
-  // 5. SVG + VERSION (HAUT GAUCHE)
+  // 5. SVG + VERSION (haut gauche)
   // ──────────────────────────────────────────────────────────
 
   const container = document.getElementById("tree-container");
@@ -221,14 +238,11 @@ function drawTree(P){
     .attr("height", H)
     .style("background", "#f5f5f7");
 
-  // ✅ Version en haut à gauche (fixe, hors zoom)
   svg.append("text")
     .attr("x", 10)
     .attr("y", 16)
-    .attr("font-family", "'DM Sans', sans-serif")
     .attr("font-size", 10)
     .attr("fill", "#9a9aa1")
-    .attr("opacity", 0.8)
     .text(`Tree.js v${TREE_VERSION}`);
 
   const svgG = svg.append("g")
@@ -236,7 +250,7 @@ function drawTree(P){
 
   svg.call(
     d3.zoom()
-      .scaleExtent([0.1, 3])
+      .scaleExtent([0.1,3])
       .on("zoom", e => svgG.attr("transform", e.transform))
   );
 
@@ -249,7 +263,6 @@ function drawTree(P){
     if(!pa || !pb) return;
 
     const y = pa.y + NH/2;
-
     svgG.append("line")
       .attr("x1", Math.min(pa.x,pb.x) + NW)
       .attr("x2", Math.max(pa.x,pb.x))
@@ -309,7 +322,7 @@ function drawTree(P){
 
     const g = svgG.append("g")
       .style("cursor","pointer")
-      .on("click", ()=> window.location.href = "person.html?id=" + id);
+      .on("click",()=>window.location.href="person.html?id="+id);
 
     g.append("rect")
       .attr("x", pt.x)
@@ -338,9 +351,8 @@ function drawTree(P){
         .attr("y", ty + 16)
         .attr("text-anchor","middle")
         .attr("font-size", 10)
-        .attr("fill", "#6e6e73")
+        .attr("fill","#6e6e73")
         .text(inf);
     }
   });
 }
-``
