@@ -1,8 +1,8 @@
 // ============================================================
-// TREE.JS — Arbre généalogique (version stable finale)
+// TREE.JS — Arbre généalogique (version finale stable)
 // ============================================================
 
-const TREE_VERSION = "1.0.2";
+const TREE_VERSION = "1.0.3";
 
 // ------------------ Helpers ------------------
 
@@ -109,7 +109,7 @@ function drawTree(P){
 
   ids.forEach(id => computeGen(id));
 
-  // ✅ PATCH : conjoints SANS parents héritent du niveau du conjoint
+  // ✅ PATCH : conjoints sans parents héritent du niveau du conjoint
   ids.forEach(id=>{
     const p = P[id];
     if(!p.sid || !P[p.sid]) return;
@@ -118,16 +118,12 @@ function drawTree(P){
     const hasParents = p.fid || p.mid;
     const spHasParents = sp.fid || sp.mid;
 
-    if(!hasParents && gen[id] !== gen[p.sid]){
-      gen[id] = gen[p.sid];
-    }
-    if(!spHasParents && gen[p.sid] !== gen[id]){
-      gen[p.sid] = gen[id];
-    }
+    if(!hasParents) gen[id] = gen[p.sid];
+    if(!spHasParents) gen[p.sid] = gen[id];
   });
 
   // ──────────────────────────────────────────────────────────
-  // 2. FAMILLES (parents biologiques)
+  // 2. FAMILLES (père + mère biologiques)
   // ──────────────────────────────────────────────────────────
 
   const families = {};
@@ -167,19 +163,18 @@ function drawTree(P){
 
     levelIds.forEach(id=>{
       if(used.has(id)) return;
-
       const sp = spouseOf[id];
+
       if(sp && levelIds.includes(sp) && !used.has(sp)){
         slots.push([id, sp]);
-        used.add(id);
-        used.add(sp);
+        used.add(id); used.add(sp);
 
         const k = [id,sp].sort().join("~");
         if(!usedSpouses.has(k)){
           usedSpouses.add(k);
           spouseLinks.push([id,sp]);
         }
-      } else {
+      }else{
         slots.push([id]);
         used.add(id);
       }
@@ -211,12 +206,27 @@ function drawTree(P){
         pos[s[0]] = { x, y };
         pos[s[1]] = { x: x + NW + CGAP, y };
         x += NW*2 + CGAP + HGAP;
-      } else {
+      }else{
         pos[s[0]] = { x, y };
         x += NW + HGAP;
       }
     });
   });
+
+  // ──────────────────────────────────────────────────────────
+  // Helper : centre visuel du parent (carte OU couple)
+  // ──────────────────────────────────────────────────────────
+
+  function parentVisualCenterX(pid){
+    const p = pos[pid];
+    if(!p) return null;
+
+    const sp = spouseOf[pid];
+    if(sp && pos[sp]){
+      return (p.x + pos[sp].x + NW) / 2;
+    }
+    return p.x + NW/2;
+  }
 
   // ──────────────────────────────────────────────────────────
   // 5. SVG + VERSION
@@ -234,7 +244,6 @@ function drawTree(P){
     .attr("height", H)
     .style("background", "#f5f5f7");
 
-  // Version (haut gauche, fixe)
   svg.append("text")
     .attr("x", 10)
     .attr("y", 16)
@@ -271,28 +280,28 @@ function drawTree(P){
   });
 
   // ──────────────────────────────────────────────────────────
-  // 7. LIENS PARENTS → ENFANTS (corrigé)
+  // 7. LIENS PARENTS → ENFANTS (enfants centrés sous le couple)
   // ──────────────────────────────────────────────────────────
 
   Object.values(families).forEach(({fid,mid,children})=>{
-    const pf = fid ? pos[fid] : null;
-    const pm = mid ? pos[mid] : null;
-    if(!pf && !pm) return;
-
-    const fx = pf ? pf.x + NW/2 : null;
-    const mx = pm ? pm.x + NW/2 : null;
+    const fx = fid ? parentVisualCenterX(fid) : null;
+    const mx = mid ? parentVisualCenterX(mid) : null;
     const jX = fx!==null && mx!==null ? (fx+mx)/2 : (fx ?? mx);
+    if(jX === null) return;
 
-    const pY = (pf || pm).y + NH;
-    const jY = pY + VGAP*0.4;
+    const parentY = (fid && pos[fid] ? pos[fid].y : pos[mid].y) + NH;
+    const joinY = parentY + VGAP*0.4;
 
-    [pf,pm].forEach(p=>{
-      if(!p) return;
+    // descentes depuis parents
+    [fid,mid].forEach(pid=>{
+      if(!pid) return;
+      const cx = parentVisualCenterX(pid);
+      if(cx === null) return;
       svgG.append("path")
         .attr("fill","none")
         .attr("stroke","#c0c0c8")
         .attr("stroke-width",1.5)
-        .attr("d", `M${p.x+NW/2},${pY} V${jY} H${jX}`);
+        .attr("d", `M${cx},${parentY} V${joinY} H${jX}`);
     });
 
     const childXs = children
@@ -305,19 +314,19 @@ function drawTree(P){
     svgG.append("line")
       .attr("x1", mnX)
       .attr("x2", mxX)
-      .attr("y1", jY)
-      .attr("y2", jY)
+      .attr("y1", joinY)
+      .attr("y2", joinY)
       .attr("stroke","#c0c0c8")
       .attr("stroke-width",1.5);
 
     children.forEach(cid=>{
-      const cp = pos[cid];
-      if(!cp) return;
+      const c = pos[cid];
+      if(!c) return;
       svgG.append("line")
-        .attr("x1", cp.x + NW/2)
-        .attr("x2", cp.x + NW/2)
-        .attr("y1", jY)
-        .attr("y2", cp.y)
+        .attr("x1", c.x + NW/2)
+        .attr("x2", c.x + NW/2)
+        .attr("y1", joinY)
+        .attr("y2", c.y)
         .attr("stroke","#c0c0c8")
         .attr("stroke-width",1.5);
     });
