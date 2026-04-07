@@ -1,8 +1,8 @@
 // ============================================================
-// TREE.JS — Arbre généalogique (version finale stable)
+// TREE.JS — Arbre généalogique (version stable finale)
 // ============================================================
 
-const TREE_VERSION = "1.0.1";
+const TREE_VERSION = "1.0.2";
 
 // ------------------ Helpers ------------------
 
@@ -109,11 +109,7 @@ function drawTree(P){
 
   ids.forEach(id => computeGen(id));
 
-  // ──────────────────────────────────────────────────────────
-  // ✅ PATCH CRITIQUE : conjoints sans parents
-  // Un conjoint SANS parents hérite du niveau de l’autre
-  // ──────────────────────────────────────────────────────────
-
+  // ✅ PATCH : conjoints SANS parents héritent du niveau du conjoint
   ids.forEach(id=>{
     const p = P[id];
     if(!p.sid || !P[p.sid]) return;
@@ -131,7 +127,7 @@ function drawTree(P){
   });
 
   // ──────────────────────────────────────────────────────────
-  // 2. FAMILLES
+  // 2. FAMILLES (parents biologiques)
   // ──────────────────────────────────────────────────────────
 
   const families = {};
@@ -183,7 +179,7 @@ function drawTree(P){
           usedSpouses.add(k);
           spouseLinks.push([id,sp]);
         }
-      }else{
+      } else {
         slots.push([id]);
         used.add(id);
       }
@@ -215,7 +211,7 @@ function drawTree(P){
         pos[s[0]] = { x, y };
         pos[s[1]] = { x: x + NW + CGAP, y };
         x += NW*2 + CGAP + HGAP;
-      }else{
+      } else {
         pos[s[0]] = { x, y };
         x += NW + HGAP;
       }
@@ -223,7 +219,7 @@ function drawTree(P){
   });
 
   // ──────────────────────────────────────────────────────────
-  // 5. SVG + VERSION (haut gauche)
+  // 5. SVG + VERSION
   // ──────────────────────────────────────────────────────────
 
   const container = document.getElementById("tree-container");
@@ -238,6 +234,7 @@ function drawTree(P){
     .attr("height", H)
     .style("background", "#f5f5f7");
 
+  // Version (haut gauche, fixe)
   svg.append("text")
     .attr("x", 10)
     .attr("y", 16)
@@ -274,7 +271,7 @@ function drawTree(P){
   });
 
   // ──────────────────────────────────────────────────────────
-  // 7. LIENS PARENTS → ENFANTS
+  // 7. LIENS PARENTS → ENFANTS (corrigé)
   // ──────────────────────────────────────────────────────────
 
   Object.values(families).forEach(({fid,mid,children})=>{
@@ -284,10 +281,10 @@ function drawTree(P){
 
     const fx = pf ? pf.x + NW/2 : null;
     const mx = pm ? pm.x + NW/2 : null;
-    const cx = fx!==null && mx!==null ? (fx+mx)/2 : (fx ?? mx);
+    const jX = fx!==null && mx!==null ? (fx+mx)/2 : (fx ?? mx);
 
-    const py = (pf || pm).y + NH;
-    const jy = py + VGAP * 0.4;
+    const pY = (pf || pm).y + NH;
+    const jY = pY + VGAP*0.4;
 
     [pf,pm].forEach(p=>{
       if(!p) return;
@@ -295,8 +292,23 @@ function drawTree(P){
         .attr("fill","none")
         .attr("stroke","#c0c0c8")
         .attr("stroke-width",1.5)
-        .attr("d", `M${p.x+NW/2},${py} V${jy} H${cx}`);
+        .attr("d", `M${p.x+NW/2},${pY} V${jY} H${jX}`);
     });
+
+    const childXs = children
+      .map(cid => pos[cid] ? pos[cid].x + NW/2 : null)
+      .filter(x => x !== null);
+
+    const mnX = Math.min(...childXs, jX);
+    const mxX = Math.max(...childXs, jX);
+
+    svgG.append("line")
+      .attr("x1", mnX)
+      .attr("x2", mxX)
+      .attr("y1", jY)
+      .attr("y2", jY)
+      .attr("stroke","#c0c0c8")
+      .attr("stroke-width",1.5);
 
     children.forEach(cid=>{
       const cp = pos[cid];
@@ -304,10 +316,10 @@ function drawTree(P){
       svgG.append("line")
         .attr("x1", cp.x + NW/2)
         .attr("x2", cp.x + NW/2)
-        .attr("y1", jy)
+        .attr("y1", jY)
         .attr("y2", cp.y)
-        .attr("stroke", "#c0c0c8")
-        .attr("stroke-width", 1.5);
+        .attr("stroke","#c0c0c8")
+        .attr("stroke-width",1.5);
     });
   });
 
