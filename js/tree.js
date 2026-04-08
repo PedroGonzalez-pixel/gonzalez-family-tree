@@ -1,6 +1,8 @@
 // ============================================================
-// ARBRE GÉNÉALOGIQUE — code validé visuellement
+// ARBRE GÉNÉALOGIQUE
 // ============================================================
+
+const TREE_VERSION = "2.0.0";
 
 function v(x){ return x&&typeof x==="string"&&x.trim()?x:null; }
 
@@ -45,8 +47,31 @@ function drawTree(P){
   const ids=Object.keys(P);
 
   // ── 1. Générations ────────────────────────────────────────
+  // ÉTAPE A : racines = sans parents
   const gen={};
   ids.forEach(id=>{ if(!P[id].fid&&!P[id].mid) gen[id]=0; });
+
+  // ÉTAPE B : aligner TOUS les conjoints d'abord (plusieurs passes)
+  // Un conjoint sans parents prend le niveau de son conjoint
+  for(let i=0;i<20;i++){
+    ids.forEach(id=>{
+      const sp=P[id].sid;
+      if(!sp||!P[sp]) return;
+      // Si l'un a un niveau et l'autre non → transférer
+      if(gen[id]!==undefined&&gen[sp]===undefined&&!P[sp].fid&&!P[sp].mid){
+        gen[sp]=gen[id];
+      }
+      if(gen[sp]!==undefined&&gen[id]===undefined&&!P[id].fid&&!P[id].mid){
+        gen[id]=gen[sp];
+      }
+      // Si les deux ont un niveau → prendre le max
+      if(gen[id]!==undefined&&gen[sp]!==undefined&&gen[id]!==gen[sp]){
+        gen[id]=gen[sp]=Math.max(gen[id],gen[sp]);
+      }
+    });
+  }
+
+  // ÉTAPE C : propager vers les enfants (maintenant que les conjoints sont alignés)
   for(let i=0;i<30;i++){
     ids.forEach(id=>{
       if(gen[id]!==undefined) return;
@@ -57,6 +82,8 @@ function drawTree(P){
       else if(mg!==undefined) gen[id]=mg+1;
     });
   }
+
+  // ÉTAPE D : conjoints sans parents encore non assignés
   for(let i=0;i<10;i++){
     ids.forEach(id=>{
       if(gen[id]!==undefined) return;
@@ -64,7 +91,9 @@ function drawTree(P){
       if(sp&&P[sp]&&gen[sp]!==undefined) gen[id]=gen[sp];
     });
   }
-  for(let i=0;i<5;i++){
+
+  // ÉTAPE E : aligner conjoints une dernière fois
+  for(let i=0;i<10;i++){
     ids.forEach(id=>{
       const sp=P[id].sid;
       if(!sp||!P[sp]) return;
@@ -72,6 +101,8 @@ function drawTree(P){
         gen[id]=gen[sp]=Math.max(gen[id],gen[sp]);
     });
   }
+
+  // Fallback
   ids.forEach(id=>{ if(gen[id]===undefined) gen[id]=0; });
 
   // ── 2. Familles ───────────────────────────────────────────
@@ -124,22 +155,18 @@ function drawTree(P){
         used.add(id); used.add(sp);
         const key=[id,sp].sort().join("~");
         if(!spDone.has(key)){ spDone.add(key); spouseLinks.push([id,sp]); }
+      } else if(sp&&noP.includes(sp)&&!used.has(sp)){
+        slots.push([id,sp]);
+        used.add(id); used.add(sp);
+        const key=[id,sp].sort().join("~");
+        if(!spDone.has(key)){ spDone.add(key); spouseLinks.push([id,sp]); }
       } else {
-        // Conjoint est dans noP ? On le fusionne directement
-        if(sp&&noP.includes(sp)&&!used.has(sp)){
-          slots.push([id,sp]);
-          used.add(id); used.add(sp);
-          const key=[id,sp].sort().join("~");
-          if(!spDone.has(key)){ spDone.add(key); spouseLinks.push([id,sp]); }
-        } else {
-          slots.push([id]);
-          used.add(id);
-        }
+        slots.push([id]);
+        used.add(id);
       }
     };
 
     withP.forEach(addWithSpouse);
-
     noP.forEach(id=>{
       if(used.has(id)) return;
       const sp=spouseOf[id];
@@ -184,6 +211,14 @@ function drawTree(P){
   d3.select("#tree-container svg").remove();
   const svg=d3.select("#tree-container").append("svg")
     .attr("width",W).attr("height",H).style("background","#f5f5f7");
+
+  // Version en haut à gauche
+  svg.append("text")
+    .attr("x",10).attr("y",18)
+    .attr("font-size",10).attr("fill","#aaaaaa")
+    .attr("font-family","'DM Sans',sans-serif")
+    .text("v"+TREE_VERSION);
+
   const g=svg.append("g").attr("transform",`translate(${W/2},40)`);
   svg.call(d3.zoom().scaleExtent([0.1,3]).on("zoom",e=>g.attr("transform",e.transform)));
 
@@ -240,7 +275,6 @@ function drawTree(P){
     const cx=pt.x+NW/2;
     let ty=pt.y+22;
 
-    // Photo
     if(p.photoURL){
       const cid="cl"+id;
       grp.append("defs").append("clipPath").attr("id",cid)
@@ -251,7 +285,6 @@ function drawTree(P){
       ty=pt.y+38;
     }
 
-    // Nom sur 1 ou 2 lignes
     const words=p.name.trim().split(" ");
     const half=Math.ceil(words.length/2);
     const two=p.name.length>16&&words.length>1;
