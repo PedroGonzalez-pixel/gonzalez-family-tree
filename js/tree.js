@@ -1,8 +1,9 @@
 // ============================================================
-// ARBRE GÉNÉALOGIQUE
+// ARBRE GÉNÉALOGIQUE v2.1.0
+// Ordre strict : racines → conjoints alignés → enfants
 // ============================================================
 
-const TREE_VERSION = "2.0.0";
+const TREE_VERSION = "2.1.0";
 
 function v(x){ return x&&typeof x==="string"&&x.trim()?x:null; }
 
@@ -46,66 +47,81 @@ firebase.auth().onAuthStateChanged(async user=>{
 function drawTree(P){
   const ids=Object.keys(P);
 
-  // ── 1. Générations ────────────────────────────────────────
-  // ÉTAPE A : racines = sans parents
+  // ── 1. GÉNÉRATIONS ────────────────────────────────────────
+  // Règle fondamentale :
+  // - Racine (sans parents) = Gen 0
+  // - Conjoint sans parents = même Gen que son conjoint
+  // - Enfant = Gen max(père, mère) + 1
+  // On répète jusqu'à stabilité complète
+
   const gen={};
-  ids.forEach(id=>{ if(!P[id].fid&&!P[id].mid) gen[id]=0; });
 
-  // ÉTAPE B : aligner TOUS les conjoints d'abord (plusieurs passes)
-  // Un conjoint sans parents prend le niveau de son conjoint
-  for(let i=0;i<20;i++){
+  // PHASE 1 : Racines strictes (sans aucun parent dans P)
+  ids.forEach(id=>{
+    if(!P[id].fid&&!P[id].mid) gen[id]=0;
+  });
+
+  // PHASE 2 : Répéter jusqu'à stabilité
+  // À chaque passe :
+  //   a) Propager parents → enfants
+  //   b) Aligner conjoints
+  let changed=true;
+  let passes=0;
+  while(changed && passes<50){
+    changed=false;
+    passes++;
+
+    // a) Propager parents → enfants
+    ids.forEach(id=>{
+      const p=P[id];
+      const hasFather=p.fid&&P[p.fid];
+      const hasMother=p.mid&&P[p.mid];
+      if(!hasFather&&!hasMother) return;
+
+      const fg=hasFather?gen[p.fid]:undefined;
+      const mg=hasMother?gen[p.mid]:undefined;
+
+      let newGen=undefined;
+      if(fg!==undefined&&mg!==undefined) newGen=Math.max(fg,mg)+1;
+      else if(fg!==undefined) newGen=fg+1;
+      else if(mg!==undefined) newGen=mg+1;
+
+      if(newGen!==undefined&&gen[id]!==newGen){
+        gen[id]=newGen;
+        changed=true;
+      }
+    });
+
+    // b) Aligner conjoints : sans parents → hérite du conjoint
     ids.forEach(id=>{
       const sp=P[id].sid;
       if(!sp||!P[sp]) return;
-      // Si l'un a un niveau et l'autre non → transférer
-      if(gen[id]!==undefined&&gen[sp]===undefined&&!P[sp].fid&&!P[sp].mid){
-        gen[sp]=gen[id];
-      }
-      if(gen[sp]!==undefined&&gen[id]===undefined&&!P[id].fid&&!P[id].mid){
+
+      // Conjoint sans parents → prend le niveau du conjoint avec parents
+      if(!P[id].fid&&!P[id].mid&&gen[id]===undefined&&gen[sp]!==undefined){
         gen[id]=gen[sp];
+        changed=true;
       }
-      // Si les deux ont un niveau → prendre le max
+      if(!P[sp].fid&&!P[sp].mid&&gen[sp]===undefined&&gen[id]!==undefined){
+        gen[sp]=gen[id];
+        changed=true;
+      }
+
+      // Si les deux ont un niveau différent → max
       if(gen[id]!==undefined&&gen[sp]!==undefined&&gen[id]!==gen[sp]){
-        gen[id]=gen[sp]=Math.max(gen[id],gen[sp]);
+        const m=Math.max(gen[id],gen[sp]);
+        if(gen[id]!==m||gen[sp]!==m){
+          gen[id]=gen[sp]=m;
+          changed=true;
+        }
       }
     });
   }
 
-  // ÉTAPE C : propager vers les enfants (maintenant que les conjoints sont alignés)
-  for(let i=0;i<30;i++){
-    ids.forEach(id=>{
-      if(gen[id]!==undefined) return;
-      const fg=P[id].fid&&P[P[id].fid]?gen[P[id].fid]:undefined;
-      const mg=P[id].mid&&P[P[id].mid]?gen[P[id].mid]:undefined;
-      if(fg!==undefined&&mg!==undefined) gen[id]=Math.max(fg,mg)+1;
-      else if(fg!==undefined) gen[id]=fg+1;
-      else if(mg!==undefined) gen[id]=mg+1;
-    });
-  }
-
-  // ÉTAPE D : conjoints sans parents encore non assignés
-  for(let i=0;i<10;i++){
-    ids.forEach(id=>{
-      if(gen[id]!==undefined) return;
-      const sp=P[id].sid;
-      if(sp&&P[sp]&&gen[sp]!==undefined) gen[id]=gen[sp];
-    });
-  }
-
-  // ÉTAPE E : aligner conjoints une dernière fois
-  for(let i=0;i<10;i++){
-    ids.forEach(id=>{
-      const sp=P[id].sid;
-      if(!sp||!P[sp]) return;
-      if(gen[id]!==undefined&&gen[sp]!==undefined&&gen[id]!==gen[sp])
-        gen[id]=gen[sp]=Math.max(gen[id],gen[sp]);
-    });
-  }
-
-  // Fallback
+  // Fallback pour les isolés
   ids.forEach(id=>{ if(gen[id]===undefined) gen[id]=0; });
 
-  // ── 2. Familles ───────────────────────────────────────────
+  // ── 2. FAMILLES ───────────────────────────────────────────
   const families={};
   ids.forEach(id=>{
     const fid=P[id].fid&&P[P[id].fid]?P[id].fid:null;
@@ -116,7 +132,7 @@ function drawTree(P){
     families[key].children.push(id);
   });
 
-  // ── 3. Slots par génération ───────────────────────────────
+  // ── 3. SLOTS PAR GÉNÉRATION ───────────────────────────────
   const byGen={};
   ids.forEach(id=>{
     const g=gen[id];
@@ -137,25 +153,23 @@ function drawTree(P){
     const used=new Set();
     const slots=[];
 
+    // Trier : personnes avec parents d'abord (groupées par famille)
     const withP=lvIds.filter(id=>P[id].fid||P[id].mid);
     const noP=lvIds.filter(id=>!P[id].fid&&!P[id].mid);
 
-    withP.sort((a,b)=>{
-      const kA=(P[a].fid||P[a].mid||"");
-      const kB=(P[b].fid||P[b].mid||"");
-      return kA.localeCompare(kB);
-    });
+    withP.sort((a,b)=>(P[a].fid||P[a].mid||"").localeCompare(P[b].fid||P[b].mid||""));
 
-    const addWithSpouse=(id)=>{
+    const addSlot=(id)=>{
       if(used.has(id)) return;
       const sp=spouseOf[id];
-      const spInLevel=sp&&lvIds.includes(sp)&&!used.has(sp);
-      if(spInLevel){
+      // Conjoint dans ce niveau ?
+      if(sp&&lvIds.includes(sp)&&!used.has(sp)){
         slots.push([id,sp]);
         used.add(id); used.add(sp);
         const key=[id,sp].sort().join("~");
         if(!spDone.has(key)){ spDone.add(key); spouseLinks.push([id,sp]); }
       } else if(sp&&noP.includes(sp)&&!used.has(sp)){
+        // Conjoint est noP mais même gen → fusionner
         slots.push([id,sp]);
         used.add(id); used.add(sp);
         const key=[id,sp].sort().join("~");
@@ -166,7 +180,7 @@ function drawTree(P){
       }
     };
 
-    withP.forEach(addWithSpouse);
+    withP.forEach(addSlot);
     noP.forEach(id=>{
       if(used.has(id)) return;
       const sp=spouseOf[id];
@@ -184,7 +198,7 @@ function drawTree(P){
     slotsByGen[g]=slots;
   });
 
-  // ── 4. Positions ──────────────────────────────────────────
+  // ── 4. POSITIONS ──────────────────────────────────────────
   const pos={};
   sortedGens.forEach(g=>{
     const slots=slotsByGen[g];
@@ -203,7 +217,7 @@ function drawTree(P){
     });
   });
 
-  // ── 5. SVG avec D3 zoom/pan ───────────────────────────────
+  // ── 5. SVG + ZOOM ─────────────────────────────────────────
   const wrapper=document.getElementById("tree-container");
   const W=wrapper.clientWidth||window.innerWidth;
   const H=wrapper.clientHeight||window.innerHeight-56;
@@ -212,9 +226,7 @@ function drawTree(P){
   const svg=d3.select("#tree-container").append("svg")
     .attr("width",W).attr("height",H).style("background","#f5f5f7");
 
-  // Version en haut à gauche
-  svg.append("text")
-    .attr("x",10).attr("y",18)
+  svg.append("text").attr("x",10).attr("y",18)
     .attr("font-size",10).attr("fill","#aaaaaa")
     .attr("font-family","'DM Sans',sans-serif")
     .text("v"+TREE_VERSION);
@@ -222,7 +234,7 @@ function drawTree(P){
   const g=svg.append("g").attr("transform",`translate(${W/2},40)`);
   svg.call(d3.zoom().scaleExtent([0.1,3]).on("zoom",e=>g.attr("transform",e.transform)));
 
-  // ── 6. Liens conjoints ────────────────────────────────────
+  // ── 6. LIENS CONJOINTS ────────────────────────────────────
   spouseLinks.forEach(([a,b])=>{
     const pa=pos[a],pb=pos[b]; if(!pa||!pb) return;
     const lx=Math.min(pa.x,pb.x)+NW, rx=Math.max(pa.x,pb.x), y=pa.y+NH/2;
@@ -231,7 +243,7 @@ function drawTree(P){
       .attr("stroke-dasharray","5,4").attr("fill","none");
   });
 
-  // ── 7. Liens parent → enfant ──────────────────────────────
+  // ── 7. LIENS PARENT → ENFANT ──────────────────────────────
   Object.values(families).forEach(({fid,mid,children})=>{
     const pf=fid?pos[fid]:null, pm=mid?pos[mid]:null;
     if(!pf&&!pm) return;
@@ -258,7 +270,7 @@ function drawTree(P){
     });
   });
 
-  // ── 8. Nœuds ─────────────────────────────────────────────
+  // ── 8. NOEUDS ─────────────────────────────────────────────
   ids.forEach(id=>{
     const p=P[id], pt=pos[id]; if(!pt) return;
 
