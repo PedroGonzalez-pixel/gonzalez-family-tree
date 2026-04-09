@@ -1,23 +1,24 @@
 // ============================================================
-// ARBRE GÉNÉALOGIQUE v2.2.0
-// Fix : barre horizontale strictement limitée aux enfants
-//       d'une même famille — pas de liaison entre familles
+// ARBRE GÉNÉALOGIQUE v2.3.0
+// Code validé visuellement
 // ============================================================
 
-const TREE_VERSION = "2.2.0";
+const TREE_VERSION = "2.3.0";
 
 function v(x){ return x&&typeof x==="string"&&x.trim()?x:null; }
 
 function info(p){
   if(!p.bd) return "";
-  if(p.dd) return p.bd.split("-")[0]+" – "+p.dd.split("-")[0];
-  const t=new Date(),b=new Date(p.bd);
-  let a=t.getFullYear()-b.getFullYear();
-  if(t.getMonth()<b.getMonth()||(t.getMonth()===b.getMonth()&&t.getDate()<b.getDate()))a--;
-  return a+" ans";
+  if(!p.dd){
+    const t=new Date(),b=new Date(p.bd);
+    let a=t.getFullYear()-b.getFullYear();
+    if(t.getMonth()<b.getMonth()||(t.getMonth()===b.getMonth()&&t.getDate()<b.getDate()))a--;
+    return a+" ans";
+  }
+  return p.bd.split("-")[0]+" – "+p.dd.split("-")[0];
 }
 
-const NW=148, NH=76, HGAP=22, CGAP=10, VGAP=96;
+const NW=140, NH=72, HGAP=18, CGAP=8, VGAP=90;
 
 firebase.auth().onAuthStateChanged(async user=>{
   if(!user) return;
@@ -29,7 +30,7 @@ firebase.auth().onAuthStateChanged(async user=>{
       const x=d.data();
       P[d.id]={
         id:d.id,
-        name:(x.firstName||"")+" "+(x.lastName||""),
+        n:(x.firstName||"")+" "+(x.lastName||""),
         nick:v(x.nickname),
         bd:v(x.birthDate), dd:v(x.deathDate),
         fid:v(x.fatherId), mid:v(x.motherId), sid:v(x.spouseId),
@@ -53,104 +54,86 @@ function drawTree(P){
   ids.forEach(id=>{ if(!P[id].fid&&!P[id].mid) gen[id]=0; });
 
   let changed=true;
-  let passes=0;
-  while(changed&&passes<50){
-    changed=false; passes++;
-
-    // a) Parents → enfants
+  while(changed){
+    changed=false;
     ids.forEach(id=>{
       const p=P[id];
-      const hasFather=p.fid&&P[p.fid];
-      const hasMother=p.mid&&P[p.mid];
-      if(!hasFather&&!hasMother) return;
-      const fg=hasFather?gen[p.fid]:undefined;
-      const mg=hasMother?gen[p.mid]:undefined;
-      let newGen=undefined;
-      if(fg!==undefined&&mg!==undefined) newGen=Math.max(fg,mg)+1;
-      else if(fg!==undefined) newGen=fg+1;
-      else if(mg!==undefined) newGen=mg+1;
-      if(newGen!==undefined&&gen[id]!==newGen){ gen[id]=newGen; changed=true; }
-    });
-
-    // b) Aligner conjoints sans parents
-    ids.forEach(id=>{
-      const sp=P[id].sid;
-      if(!sp||!P[sp]) return;
-      if(!P[id].fid&&!P[id].mid&&gen[id]===undefined&&gen[sp]!==undefined){
-        gen[id]=gen[sp]; changed=true;
+      // Parents → enfants
+      const fg=p.fid&&P[p.fid]?gen[p.fid]:undefined;
+      const mg=p.mid&&P[p.mid]?gen[p.mid]:undefined;
+      if(p.fid||p.mid){
+        let ng=fg!==undefined&&mg!==undefined?Math.max(fg,mg)+1:fg!==undefined?fg+1:mg!==undefined?mg+1:undefined;
+        if(ng!==undefined&&gen[id]!==ng){gen[id]=ng;changed=true;}
       }
-      if(!P[sp].fid&&!P[sp].mid&&gen[sp]===undefined&&gen[id]!==undefined){
-        gen[sp]=gen[id]; changed=true;
-      }
-      if(gen[id]!==undefined&&gen[sp]!==undefined&&gen[id]!==gen[sp]){
-        const m=Math.max(gen[id],gen[sp]);
-        gen[id]=gen[sp]=m; changed=true;
+      // Conjoints sans parents → héritent du niveau
+      if(p.sid&&P[p.sid]){
+        if(!p.fid&&!p.mid&&gen[id]===undefined&&gen[p.sid]!==undefined){gen[id]=gen[p.sid];changed=true;}
+        if(!P[p.sid].fid&&!P[p.sid].mid&&gen[p.sid]===undefined&&gen[id]!==undefined){gen[p.sid]=gen[id];changed=true;}
+        // Aligner au même niveau
+        if(gen[id]!==undefined&&gen[p.sid]!==undefined&&gen[id]!==gen[p.sid]){
+          const m=Math.max(gen[id],gen[p.sid]);gen[id]=gen[p.sid]=m;changed=true;
+        }
       }
     });
   }
   ids.forEach(id=>{ if(gen[id]===undefined) gen[id]=0; });
 
   // ── 2. FAMILLES ───────────────────────────────────────────
-  const families={};
+  const fams={};
   ids.forEach(id=>{
     const fid=P[id].fid&&P[P[id].fid]?P[id].fid:null;
     const mid=P[id].mid&&P[P[id].mid]?P[id].mid:null;
     if(!fid&&!mid) return;
-    const key=(fid||"X")+"##"+(mid||"X");
-    if(!families[key]) families[key]={fid,mid,children:[]};
-    families[key].children.push(id);
+    const k=(fid||"X")+"##"+(mid||"X");
+    if(!fams[k]) fams[k]={fid,mid,ch:[]};
+    fams[k].ch.push(id);
   });
 
   // ── 3. SLOTS ──────────────────────────────────────────────
   const byGen={};
   ids.forEach(id=>{
-    const g=gen[id];
-    if(!byGen[g]) byGen[g]=[];
-    if(!byGen[g].includes(id)) byGen[g].push(id);
+    if(!byGen[gen[id]]) byGen[gen[id]]=[];
+    if(!byGen[gen[id]].includes(id)) byGen[gen[id]].push(id);
   });
 
   const spouseOf={};
   ids.forEach(id=>{ if(P[id].sid&&P[P[id].sid]) spouseOf[id]=P[id].sid; });
 
   const slotsByGen={};
-  const spouseLinks=[];
+  const spLinks=[];
   const spDone=new Set();
-  const sortedGens=Object.keys(byGen).map(Number).sort((a,b)=>a-b);
 
-  sortedGens.forEach(g=>{
+  Object.keys(byGen).sort((a,b)=>a-b).forEach(g=>{
     const lvIds=[...byGen[g]];
     const used=new Set();
     const slots=[];
-
     const withP=lvIds.filter(id=>P[id].fid||P[id].mid);
     const noP=lvIds.filter(id=>!P[id].fid&&!P[id].mid);
     withP.sort((a,b)=>(P[a].fid||P[a].mid||"").localeCompare(P[b].fid||P[b].mid||""));
 
-    const addSlot=(id)=>{
+    const add=(id)=>{
       if(used.has(id)) return;
       const sp=spouseOf[id];
-      if(sp&&lvIds.includes(sp)&&!used.has(sp)){
+      if(sp&&(lvIds.includes(sp)||noP.includes(sp))&&!used.has(sp)){
         slots.push([id,sp]); used.add(id); used.add(sp);
-        const key=[id,sp].sort().join("~");
-        if(!spDone.has(key)){ spDone.add(key); spouseLinks.push([id,sp]); }
-      } else if(sp&&noP.includes(sp)&&!used.has(sp)){
-        slots.push([id,sp]); used.add(id); used.add(sp);
-        const key=[id,sp].sort().join("~");
-        if(!spDone.has(key)){ spDone.add(key); spouseLinks.push([id,sp]); }
+        const k=[id,sp].sort().join("~");
+        if(!spDone.has(k)){ spDone.add(k); spLinks.push([id,sp]); }
       } else {
         slots.push([id]); used.add(id);
       }
     };
 
-    withP.forEach(addSlot);
+    withP.forEach(add);
     noP.forEach(id=>{
       if(used.has(id)) return;
       const sp=spouseOf[id];
       if(sp&&lvIds.includes(sp)&&!used.has(sp)){
         slots.push([id,sp]); used.add(id); used.add(sp);
-        const key=[id,sp].sort().join("~");
-        if(!spDone.has(key)){ spDone.add(key); spouseLinks.push([id,sp]); }
-      } else { slots.push([id]); used.add(id); }
+        const k=[id,sp].sort().join("~");
+        if(!spDone.has(k)){ spDone.add(k); spLinks.push([id,sp]); }
+      } else {
+        slots.push([id]); used.add(id);
+      }
     });
 
     slotsByGen[g]=slots;
@@ -158,20 +141,16 @@ function drawTree(P){
 
   // ── 4. POSITIONS ──────────────────────────────────────────
   const pos={};
-  sortedGens.forEach(g=>{
+  Object.keys(slotsByGen).sort((a,b)=>a-b).forEach(g=>{
     const slots=slotsByGen[g];
-    let totalW=0;
-    slots.forEach(s=>{ totalW+=s.length===2?NW*2+CGAP:NW; });
-    totalW+=(slots.length-1)*HGAP;
-    let x=-totalW/2;
-    const y=g*(NH+VGAP);
-    slots.forEach(slot=>{
-      if(slot.length===2){
-        pos[slot[0]]={x,y}; pos[slot[1]]={x:x+NW+CGAP,y};
-        x+=NW*2+CGAP+HGAP;
-      } else {
-        pos[slot[0]]={x,y}; x+=NW+HGAP;
-      }
+    let tw=0;
+    slots.forEach(s=>{ tw+=s.length===2?NW*2+CGAP:NW; });
+    tw+=(slots.length-1)*HGAP;
+    let x=-tw/2;
+    const y=+g*(NH+VGAP);
+    slots.forEach(s=>{
+      if(s.length===2){ pos[s[0]]={x,y}; pos[s[1]]={x:x+NW+CGAP,y}; x+=NW*2+CGAP+HGAP; }
+      else { pos[s[0]]={x,y}; x+=NW+HGAP; }
     });
   });
 
@@ -193,7 +172,7 @@ function drawTree(P){
   svg.call(d3.zoom().scaleExtent([0.1,3]).on("zoom",e=>g.attr("transform",e.transform)));
 
   // ── 6. LIENS CONJOINTS ────────────────────────────────────
-  spouseLinks.forEach(([a,b])=>{
+  spLinks.forEach(([a,b])=>{
     const pa=pos[a],pb=pos[b]; if(!pa||!pb) return;
     const lx=Math.min(pa.x,pb.x)+NW, rx=Math.max(pa.x,pb.x), y=pa.y+NH/2;
     g.append("line").attr("x1",lx).attr("y1",y).attr("x2",rx).attr("y2",y)
@@ -202,24 +181,13 @@ function drawTree(P){
   });
 
   // ── 7. LIENS PARENT → ENFANT ──────────────────────────────
-  // RÈGLE : la barre horizontale va UNIQUEMENT du min au max
-  // des centres des enfants DE CETTE FAMILLE.
-  // La jonction parentale descend jusqu'à cette barre via
-  // un segment vertical, sans déborder.
-
-  Object.values(families).forEach(({fid,mid,children})=>{
+  Object.values(fams).forEach(({fid,mid,ch})=>{
     const pf=fid?pos[fid]:null, pm=mid?pos[mid]:null;
     if(!pf&&!pm) return;
-
-    const fCx=pf?pf.x+NW/2:null;
-    const mCx=pm?pm.x+NW/2:null;
-
-    // Point de jonction X = milieu entre les deux parents
+    const fCx=pf?pf.x+NW/2:null, mCx=pm?pm.x+NW/2:null;
     const jX=fCx!==null&&mCx!==null?(fCx+mCx)/2:(fCx||mCx);
-    const pY=(pf||pm).y+NH;
-    const jY=pY+VGAP*0.4;
+    const pY=(pf||pm).y+NH, jY=pY+VGAP*0.4;
 
-    // Lignes depuis chaque parent vers le point de jonction
     if(fCx!==null)
       g.append("path").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
         .attr("d",`M${fCx},${pY} V${jY} H${jX}`);
@@ -227,38 +195,22 @@ function drawTree(P){
       g.append("path").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
         .attr("d",`M${mCx},${pY} V${jY} H${jX}`);
 
-    // Positions des enfants de CETTE famille uniquement
-    const cps=children.map(cid=>pos[cid]).filter(Boolean);
+    const cps=ch.map(cid=>pos[cid]).filter(Boolean);
     if(!cps.length) return;
-
     const cxs=cps.map(cp=>cp.x+NW/2);
 
-    // Barre horizontale : UNIQUEMENT entre le min et max des enfants
-    // + connexion depuis jX jusqu'à la barre
-    const minCx=Math.min(...cxs);
-    const maxCx=Math.max(...cxs);
-
-    // Segment vertical depuis jX jusqu'à jY (déjà fait via path)
-    // Connexion horizontale de jX vers la barre des enfants
     if(cps.length===1){
-      // Un seul enfant : ligne droite depuis jX vers enfant
       g.append("line").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
         .attr("x1",jX).attr("y1",jY).attr("x2",cxs[0]).attr("y2",jY);
     } else {
-      // Plusieurs enfants : barre entre min et max des enfants
       g.append("line").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
-        .attr("x1",minCx).attr("y1",jY).attr("x2",maxCx).attr("y2",jY);
-      // Connexion depuis jX vers la barre si jX est hors de [minCx, maxCx]
-      if(jX<minCx){
+        .attr("x1",Math.min(...cxs)).attr("y1",jY).attr("x2",Math.max(...cxs)).attr("y2",jY);
+      const clamp=Math.max(Math.min(...cxs),Math.min(Math.max(...cxs),jX));
+      if(Math.abs(jX-clamp)>1)
         g.append("line").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
-          .attr("x1",jX).attr("y1",jY).attr("x2",minCx).attr("y2",jY);
-      } else if(jX>maxCx){
-        g.append("line").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
-          .attr("x1",maxCx).attr("y1",jY).attr("x2",jX).attr("y2",jY);
-      }
+          .attr("x1",jX).attr("y1",jY).attr("x2",clamp).attr("y2",jY);
     }
 
-    // Descente vers chaque enfant
     cps.forEach(cp=>{
       g.append("line").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
         .attr("x1",cp.x+NW/2).attr("y1",jY).attr("x2",cp.x+NW/2).attr("y2",cp.y);
@@ -292,10 +244,10 @@ function drawTree(P){
       ty=pt.y+38;
     }
 
-    const words=p.name.trim().split(" ");
+    const words=p.n.trim().split(" ");
     const half=Math.ceil(words.length/2);
-    const two=p.name.length>16&&words.length>1;
-    const lines=two?[words.slice(0,half).join(" "),words.slice(half).join(" ")]:[p.name.trim()];
+    const two=p.n.length>16&&words.length>1;
+    const lines=two?[words.slice(0,half).join(" "),words.slice(half).join(" ")]:[p.n.trim()];
 
     lines.forEach((ln,i)=>{
       grp.append("text").attr("x",cx).attr("y",ty+i*14)
