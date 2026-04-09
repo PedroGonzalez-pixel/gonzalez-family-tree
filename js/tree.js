@@ -1,7 +1,7 @@
-// ARBRE GÉNÉALOGIQUE v2.6.0
-const TREE_VERSION = "2.6.0";
+// ARBRE GÉNÉALOGIQUE v2.6.1
+const TREE_VERSION = "2.6.1";
 
-function v(x){return x && typeof x==="string" && x.trim() ? x : null;}
+function v(x){ return x && typeof x==="string" && x.trim() ? x : null; }
 
 function getInfo(p){
   if(!p.bd) return "";
@@ -14,12 +14,11 @@ function getInfo(p){
   return p.bd.split("-")[0]+" – "+p.dd.split("-")[0];
 }
 
-const NW=140, NH=72;
-const HGAP=18, CGAP=8, VGAP=90;
-const LANE_HEIGHT = 28;
+const NW=140, NH=72, HGAP=18, CGAP=8, VGAP=90;
 
 firebase.auth().onAuthStateChanged(async user=>{
   if(!user) return;
+
   const snap = await db.collection("persons").get();
   if(snap.empty) return;
 
@@ -38,16 +37,17 @@ firebase.auth().onAuthStateChanged(async user=>{
       photoURL:v(x.photoURL)
     };
   });
+
   document.getElementById("loadingMsg").style.display="none";
   document.getElementById("tree-container").style.display="block";
   drawTree(P);
 });
 
 function drawTree(P){
-  const ids = Object.keys(P);
+  const ids=Object.keys(P);
 
   // ── GÉNÉRATIONS ───────────────────────────────────────────
-  const gen = {};
+  const gen={};
   ids.forEach(id=>{
     if(!P[id].fid && !P[id].mid) gen[id]=0;
   });
@@ -65,29 +65,30 @@ function drawTree(P){
           fg!==undefined?fg:-1,
           mg!==undefined?mg:-1
         )+1;
-        if(gen[id]!==ng){gen[id]=ng;changed=true;}
+        if(gen[id]!==ng){ gen[id]=ng; changed=true; }
       }
 
-      if(p.sid&&P[p.sid]){
+      if(p.sid && P[p.sid]){
         if(gen[id]!==undefined && gen[p.sid]!==undefined && gen[id]!==gen[p.sid]){
           const m=Math.max(gen[id],gen[p.sid]);
-          gen[id]=gen[p.sid]=m;changed=true;
+          gen[id]=gen[p.sid]=m;
+          changed=true;
         }
-        if(gen[id]===undefined && gen[p.sid]!==undefined){gen[id]=gen[p.sid];changed=true;}
-        if(gen[p.sid]===undefined && gen[id]!==undefined){gen[p.sid]=gen[id];changed=true;}
+        if(gen[id]===undefined && gen[p.sid]!==undefined){ gen[id]=gen[p.sid]; changed=true; }
+        if(gen[p.sid]===undefined && gen[id]!==undefined){ gen[p.sid]=gen[id]; changed=true; }
       }
     });
   }
   ids.forEach(id=>{ if(gen[id]===undefined) gen[id]=0; });
 
-  // ── FAMILLES ──────────────────────────────────────────────
+  // ── FAMILLES (PARENTS → ENFANTS) ──────────────────────────
   const fams={};
   ids.forEach(id=>{
     const fid=P[id].fid&&P[P[id].fid]?P[id].fid:null;
     const mid=P[id].mid&&P[P[id].mid]?P[id].mid:null;
     if(!fid&&!mid) return;
     const k=(fid||"X")+"##"+(mid||"X");
-    if(!fams[k]) fams[k]={fid,mid,ch:[],key:k};
+    if(!fams[k]) fams[k]={fid,mid,ch:[]};
     fams[k].ch.push(id);
   });
 
@@ -114,25 +115,28 @@ function drawTree(P){
       const sp=spouseOf[id];
       if(sp && lvIds.includes(sp) && !used.has(sp)){
         slots.push([id,sp]);
-        used.add(id);used.add(sp);
+        used.add(id); used.add(sp);
       }else{
         slots.push([id]);
         used.add(id);
       }
     };
+
     lvIds.forEach(add);
     slotsByGen[g]=slots;
   });
 
-  // ── POSITIONS DES PERSONNES (COUPLES CÔTE À CÔTE) ─────────
+  // ── POSITIONS DES PERSONNES ───────────────────────────────
   const pos={};
   Object.keys(slotsByGen).forEach(g=>{
     const slots=slotsByGen[g];
     let tw=0;
-    slots.forEach(s=>{tw+=s.length===2?(NW*2+CGAP):NW;});
+    slots.forEach(s=>{ tw+=s.length===2?(NW*2+CGAP):NW; });
     tw+=(slots.length-1)*HGAP;
 
-    let x=-tw/2, y=g*(NH+VGAP);
+    let x=-tw/2;
+    const y=g*(NH+VGAP);
+
     slots.forEach(s=>{
       if(s.length===2){
         pos[s[0]]={x,y};
@@ -143,17 +147,6 @@ function drawTree(P){
         x+=NW+HGAP;
       }
     });
-  });
-
-  // ── LANES DE FRATRIES ─────────────────────────────────────
-  const famLanesByGen={};
-  Object.values(fams).forEach(f=>{
-    const p=f.fid&&pos[f.fid]?pos[f.fid]:
-            f.mid&&pos[f.mid]?pos[f.mid]:null;
-    if(!p) return;
-    const g=Math.round(p.y/(NH+VGAP));
-    if(!famLanesByGen[g]) famLanesByGen[g]=[];
-    famLanesByGen[g].push(f);
   });
 
   // ── SVG ───────────────────────────────────────────────────
@@ -177,33 +170,11 @@ function drawTree(P){
   const g=svg.append("g").attr("transform",`translate(${W/2},40)`);
   svg.call(d3.zoom().scaleExtent([0.1,3]).on("zoom",e=>g.attr("transform",e.transform)));
 
-  // ── FONDS ALTERNÉS DES FRATRIES ───────────────────────────
-  Object.entries(famLanesByGen).forEach(([genKey,famsInGen])=>{
-    famsInGen.forEach((f,idx)=>{
-      if(idx%2!==0) return;
-      const p=f.fid&&pos[f.fid]?pos[f.fid]:
-              f.mid&&pos[f.mid]?pos[f.mid]:null;
-      const baseY=p.y+NH+VGAP*0.35;
-      const y=baseY+idx*LANE_HEIGHT;
-      g.append("rect")
-        .attr("x",-4000)
-        .attr("y",y-LANE_HEIGHT/2)
-        .attr("width",8000)
-        .attr("height",LANE_HEIGHT)
-        .attr("fill","#eef0f4")
-        .lower();
-    });
-  });
-
   // ── LIENS PARENTS → ENFANTS (ENFANTS SOUS LEURS PARENTS) ───
-  Object.entries(fams).forEach(([key,f])=>{
+  Object.values(fams).forEach(f=>{
     const pf=f.fid&&pos[f.fid]?pos[f.fid]:null;
     const pm=f.mid&&pos[f.mid]?pos[f.mid]:null;
     if(!pf&&!pm) return;
-
-    const gidx=Math.round((pf||pm).y/(NH+VGAP));
-    const famsInGen=famLanesByGen[gidx]||[];
-    const laneIdx=famsInGen.findIndex(x=>x.key===key);
 
     const parentCenterX =
       pf && pm ? (pf.x+pm.x+NW)/2 :
@@ -211,17 +182,19 @@ function drawTree(P){
       pm.x+NW/2;
 
     const pY=(pf||pm).y+NH;
-    const jY=pY+VGAP*0.35+laneIdx*LANE_HEIGHT;
+    const jY=pY+VGAP*0.4;
 
-    if(pf) g.append("path")
-      .attr("d",`M${pf.x+NW/2},${pY} V${jY} H${parentCenterX}`)
-      .attr("fill","none").attr("stroke","#c0c0c8");
-    if(pm && pm!==pf) g.append("path")
-      .attr("d",`M${pm.x+NW/2},${pY} V${jY} H${parentCenterX}`)
-      .attr("fill","none").attr("stroke","#c0c0c8");
+    if(pf)
+      g.append("path")
+        .attr("d",`M${pf.x+NW/2},${pY} V${jY} H${parentCenterX}`)
+        .attr("fill","none").attr("stroke","#c0c0c8");
+
+    if(pm&&pm!==pf)
+      g.append("path")
+        .attr("d",`M${pm.x+NW/2},${pY} V${jY} H${parentCenterX}`)
+        .attr("fill","none").attr("stroke","#c0c0c8");
 
     const cps=f.ch.map(id=>pos[id]).filter(Boolean);
-    if(!cps.length) return;
     const xs=cps.map(c=>c.x+NW/2);
 
     if(cps.length>1)
@@ -243,6 +216,7 @@ function drawTree(P){
   ids.forEach(id=>{
     const p=P[id], pt=pos[id];
     if(!pt) return;
+
     const grp=g.append("g")
       .style("cursor","pointer")
       .on("click",()=>location.href="person.html?id="+id);
@@ -260,12 +234,12 @@ function drawTree(P){
       .text(p.n);
 
     const inf=getInfo(p);
-    if(inf) grp.append("text")
-      .attr("x",pt.x+NW/2).attr("y",pt.y+48)
-      .attr("text-anchor","middle")
-      .attr("font-size",10)
-      .attr("fill","#6e6e73")
-      .text(inf);
+    if(inf)
+      grp.append("text")
+        .attr("x",pt.x+NW/2).attr("y",pt.y+48)
+        .attr("text-anchor","middle")
+        .attr("font-size",10)
+        .attr("fill","#6e6e73")
+        .text(inf);
   });
 }
-``
