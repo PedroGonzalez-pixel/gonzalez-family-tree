@@ -1,9 +1,10 @@
 // ============================================================
-// ARBRE GÉNÉALOGIQUE v2.1.0
-// Ordre strict : racines → conjoints alignés → enfants
+// ARBRE GÉNÉALOGIQUE v2.2.0
+// Fix : barre horizontale strictement limitée aux enfants
+//       d'une même famille — pas de liaison entre familles
 // ============================================================
 
-const TREE_VERSION = "2.1.0";
+const TREE_VERSION = "2.2.0";
 
 function v(x){ return x&&typeof x==="string"&&x.trim()?x:null; }
 
@@ -48,77 +49,45 @@ function drawTree(P){
   const ids=Object.keys(P);
 
   // ── 1. GÉNÉRATIONS ────────────────────────────────────────
-  // Règle fondamentale :
-  // - Racine (sans parents) = Gen 0
-  // - Conjoint sans parents = même Gen que son conjoint
-  // - Enfant = Gen max(père, mère) + 1
-  // On répète jusqu'à stabilité complète
-
   const gen={};
+  ids.forEach(id=>{ if(!P[id].fid&&!P[id].mid) gen[id]=0; });
 
-  // PHASE 1 : Racines strictes (sans aucun parent dans P)
-  ids.forEach(id=>{
-    if(!P[id].fid&&!P[id].mid) gen[id]=0;
-  });
-
-  // PHASE 2 : Répéter jusqu'à stabilité
-  // À chaque passe :
-  //   a) Propager parents → enfants
-  //   b) Aligner conjoints
   let changed=true;
   let passes=0;
-  while(changed && passes<50){
-    changed=false;
-    passes++;
+  while(changed&&passes<50){
+    changed=false; passes++;
 
-    // a) Propager parents → enfants
+    // a) Parents → enfants
     ids.forEach(id=>{
       const p=P[id];
       const hasFather=p.fid&&P[p.fid];
       const hasMother=p.mid&&P[p.mid];
       if(!hasFather&&!hasMother) return;
-
       const fg=hasFather?gen[p.fid]:undefined;
       const mg=hasMother?gen[p.mid]:undefined;
-
       let newGen=undefined;
       if(fg!==undefined&&mg!==undefined) newGen=Math.max(fg,mg)+1;
       else if(fg!==undefined) newGen=fg+1;
       else if(mg!==undefined) newGen=mg+1;
-
-      if(newGen!==undefined&&gen[id]!==newGen){
-        gen[id]=newGen;
-        changed=true;
-      }
+      if(newGen!==undefined&&gen[id]!==newGen){ gen[id]=newGen; changed=true; }
     });
 
-    // b) Aligner conjoints : sans parents → hérite du conjoint
+    // b) Aligner conjoints sans parents
     ids.forEach(id=>{
       const sp=P[id].sid;
       if(!sp||!P[sp]) return;
-
-      // Conjoint sans parents → prend le niveau du conjoint avec parents
       if(!P[id].fid&&!P[id].mid&&gen[id]===undefined&&gen[sp]!==undefined){
-        gen[id]=gen[sp];
-        changed=true;
+        gen[id]=gen[sp]; changed=true;
       }
       if(!P[sp].fid&&!P[sp].mid&&gen[sp]===undefined&&gen[id]!==undefined){
-        gen[sp]=gen[id];
-        changed=true;
+        gen[sp]=gen[id]; changed=true;
       }
-
-      // Si les deux ont un niveau différent → max
       if(gen[id]!==undefined&&gen[sp]!==undefined&&gen[id]!==gen[sp]){
         const m=Math.max(gen[id],gen[sp]);
-        if(gen[id]!==m||gen[sp]!==m){
-          gen[id]=gen[sp]=m;
-          changed=true;
-        }
+        gen[id]=gen[sp]=m; changed=true;
       }
     });
   }
-
-  // Fallback pour les isolés
   ids.forEach(id=>{ if(gen[id]===undefined) gen[id]=0; });
 
   // ── 2. FAMILLES ───────────────────────────────────────────
@@ -132,7 +101,7 @@ function drawTree(P){
     families[key].children.push(id);
   });
 
-  // ── 3. SLOTS PAR GÉNÉRATION ───────────────────────────────
+  // ── 3. SLOTS ──────────────────────────────────────────────
   const byGen={};
   ids.forEach(id=>{
     const g=gen[id];
@@ -153,30 +122,23 @@ function drawTree(P){
     const used=new Set();
     const slots=[];
 
-    // Trier : personnes avec parents d'abord (groupées par famille)
     const withP=lvIds.filter(id=>P[id].fid||P[id].mid);
     const noP=lvIds.filter(id=>!P[id].fid&&!P[id].mid);
-
     withP.sort((a,b)=>(P[a].fid||P[a].mid||"").localeCompare(P[b].fid||P[b].mid||""));
 
     const addSlot=(id)=>{
       if(used.has(id)) return;
       const sp=spouseOf[id];
-      // Conjoint dans ce niveau ?
       if(sp&&lvIds.includes(sp)&&!used.has(sp)){
-        slots.push([id,sp]);
-        used.add(id); used.add(sp);
+        slots.push([id,sp]); used.add(id); used.add(sp);
         const key=[id,sp].sort().join("~");
         if(!spDone.has(key)){ spDone.add(key); spouseLinks.push([id,sp]); }
       } else if(sp&&noP.includes(sp)&&!used.has(sp)){
-        // Conjoint est noP mais même gen → fusionner
-        slots.push([id,sp]);
-        used.add(id); used.add(sp);
+        slots.push([id,sp]); used.add(id); used.add(sp);
         const key=[id,sp].sort().join("~");
         if(!spDone.has(key)){ spDone.add(key); spouseLinks.push([id,sp]); }
       } else {
-        slots.push([id]);
-        used.add(id);
+        slots.push([id]); used.add(id);
       }
     };
 
@@ -185,14 +147,10 @@ function drawTree(P){
       if(used.has(id)) return;
       const sp=spouseOf[id];
       if(sp&&lvIds.includes(sp)&&!used.has(sp)){
-        slots.push([id,sp]);
-        used.add(id); used.add(sp);
+        slots.push([id,sp]); used.add(id); used.add(sp);
         const key=[id,sp].sort().join("~");
         if(!spDone.has(key)){ spDone.add(key); spouseLinks.push([id,sp]); }
-      } else {
-        slots.push([id]);
-        used.add(id);
-      }
+      } else { slots.push([id]); used.add(id); }
     });
 
     slotsByGen[g]=slots;
@@ -244,13 +202,24 @@ function drawTree(P){
   });
 
   // ── 7. LIENS PARENT → ENFANT ──────────────────────────────
+  // RÈGLE : la barre horizontale va UNIQUEMENT du min au max
+  // des centres des enfants DE CETTE FAMILLE.
+  // La jonction parentale descend jusqu'à cette barre via
+  // un segment vertical, sans déborder.
+
   Object.values(families).forEach(({fid,mid,children})=>{
     const pf=fid?pos[fid]:null, pm=mid?pos[mid]:null;
     if(!pf&&!pm) return;
-    const fCx=pf?pf.x+NW/2:null, mCx=pm?pm.x+NW/2:null;
-    const jX=fCx!==null&&mCx!==null?(fCx+mCx)/2:(fCx||mCx);
-    const pY=(pf||pm).y+NH, jY=pY+VGAP*0.4;
 
+    const fCx=pf?pf.x+NW/2:null;
+    const mCx=pm?pm.x+NW/2:null;
+
+    // Point de jonction X = milieu entre les deux parents
+    const jX=fCx!==null&&mCx!==null?(fCx+mCx)/2:(fCx||mCx);
+    const pY=(pf||pm).y+NH;
+    const jY=pY+VGAP*0.4;
+
+    // Lignes depuis chaque parent vers le point de jonction
     if(fCx!==null)
       g.append("path").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
         .attr("d",`M${fCx},${pY} V${jY} H${jX}`);
@@ -258,12 +227,38 @@ function drawTree(P){
       g.append("path").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
         .attr("d",`M${mCx},${pY} V${jY} H${jX}`);
 
+    // Positions des enfants de CETTE famille uniquement
     const cps=children.map(cid=>pos[cid]).filter(Boolean);
     if(!cps.length) return;
+
     const cxs=cps.map(cp=>cp.x+NW/2);
-    const mnX=Math.min(...cxs,jX), mxX=Math.max(...cxs,jX);
-    g.append("line").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
-      .attr("x1",mnX).attr("y1",jY).attr("x2",mxX).attr("y2",jY);
+
+    // Barre horizontale : UNIQUEMENT entre le min et max des enfants
+    // + connexion depuis jX jusqu'à la barre
+    const minCx=Math.min(...cxs);
+    const maxCx=Math.max(...cxs);
+
+    // Segment vertical depuis jX jusqu'à jY (déjà fait via path)
+    // Connexion horizontale de jX vers la barre des enfants
+    if(cps.length===1){
+      // Un seul enfant : ligne droite depuis jX vers enfant
+      g.append("line").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
+        .attr("x1",jX).attr("y1",jY).attr("x2",cxs[0]).attr("y2",jY);
+    } else {
+      // Plusieurs enfants : barre entre min et max des enfants
+      g.append("line").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
+        .attr("x1",minCx).attr("y1",jY).attr("x2",maxCx).attr("y2",jY);
+      // Connexion depuis jX vers la barre si jX est hors de [minCx, maxCx]
+      if(jX<minCx){
+        g.append("line").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
+          .attr("x1",jX).attr("y1",jY).attr("x2",minCx).attr("y2",jY);
+      } else if(jX>maxCx){
+        g.append("line").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
+          .attr("x1",maxCx).attr("y1",jY).attr("x2",jX).attr("y2",jY);
+      }
+    }
+
+    // Descente vers chaque enfant
     cps.forEach(cp=>{
       g.append("line").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
         .attr("x1",cp.x+NW/2).attr("y1",jY).attr("x2",cp.x+NW/2).attr("y2",cp.y);
