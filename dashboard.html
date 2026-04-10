@@ -4,35 +4,249 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Dashboard – Famille Gonzalez</title>
-  <link rel="stylesheet" href="css/style.css">
-  <!-- Firebase v8 -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=Playfair+Display:wght@400;500&display=swap" rel="stylesheet">
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #f5f5f7; --surface: #ffffff; --border: #e0e0e5;
+      --text: #1d1d1f; --muted: #6e6e73; --accent: #0071e3;
+      --radius: 16px; --radius-sm: 8px;
+    }
+    body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* TOPBAR */
+    .topbar {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(255,255,255,0.85);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 32px; height: 56px;
+    }
+    .topbar h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: 18px; font-weight: 500;
+    }
+    .topbar-right { display: flex; align-items: center; gap: 12px; }
+
+    .lang-switcher {
+      display: flex; background: var(--bg);
+      border: 1px solid var(--border); border-radius: 20px; padding: 3px; gap: 2px;
+    }
+    .lang-btn {
+      border: none; background: transparent; padding: 4px 12px; border-radius: 16px;
+      font-size: 12px; font-weight: 500; cursor: pointer; color: var(--muted);
+      font-family: 'DM Sans', sans-serif; transition: all 0.2s;
+    }
+    .lang-btn.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+
+    .btn-logout {
+      border: 1px solid var(--border); background: transparent;
+      padding: 6px 16px; border-radius: 20px; font-size: 13px;
+      color: var(--muted); cursor: pointer; font-family: 'DM Sans', sans-serif;
+      transition: all 0.15s;
+    }
+    .btn-logout:hover { background: var(--bg); color: var(--text); }
+
+    /* MAIN */
+    main { max-width: 800px; margin: 48px auto; padding: 0 24px 80px; }
+
+    .welcome {
+      margin-bottom: 40px;
+    }
+    .welcome h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 32px; font-weight: 500;
+      margin-bottom: 8px;
+    }
+    .welcome p {
+      font-size: 15px; color: var(--muted);
+    }
+
+    /* GRILLE */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+
+    .card {
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px 24px;
+      text-decoration: none;
+      color: var(--text);
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+    }
+    .card:hover {
+      border-color: var(--accent);
+      box-shadow: 0 4px 24px rgba(0,113,227,0.12);
+      transform: translateY(-2px);
+    }
+
+    .card-icon {
+      font-size: 28px;
+      flex-shrink: 0;
+      width: 48px; height: 48px;
+      background: var(--bg);
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .card-body h3 {
+      font-size: 15px; font-weight: 500;
+      margin-bottom: 4px;
+    }
+    .card-body p {
+      font-size: 13px; color: var(--muted);
+      line-height: 1.5;
+    }
+
+    @media (max-width: 600px) {
+      .grid { grid-template-columns: 1fr; }
+      main { margin: 24px auto; }
+      .topbar { padding: 0 16px; }
+      .topbar h1 { font-size: 15px; }
+      .welcome h2 { font-size: 24px; }
+    }
+  </style>
 </head>
 <body>
 
   <header class="topbar">
-    <h1>Famille Gonzalez</h1>
-    <button id="logoutBtn" class="btn">Déconnexion</button>
+    <h1 data-i18n="title">Famille Gonzalez</h1>
+    <div class="topbar-right">
+      <div class="lang-switcher">
+        <button class="lang-btn active" onclick="setLang('fr')">FR</button>
+        <button class="lang-btn" onclick="setLang('es')">ES</button>
+        <button class="lang-btn" onclick="setLang('en')">EN</button>
+      </div>
+      <button class="btn-logout" id="logoutBtn" data-i18n="logout">Déconnexion</button>
+    </div>
   </header>
 
-  <main class="grid">
-    <a href="tree.html" class="card">🌳 Arbre Généalogique</a>
-    <a href="gallery.html" class="card">📸 Galerie</a>
-    <a href="timeline.html" class="card">🕒 Frise Historique</a>
-    <a href="edit.html" class="card">➕ Ajouter une personne</a>
+  <main>
+    <div class="welcome">
+      <h2 data-i18n="welcome">Bienvenue</h2>
+      <p data-i18n="welcomeSub">Que souhaitez-vous explorer ?</p>
+    </div>
+
+    <div class="grid">
+      <a href="tree.html" class="card">
+        <div class="card-icon">🌳</div>
+        <div class="card-body">
+          <h3 data-i18n="tree">Arbre Généalogique</h3>
+          <p data-i18n="treeSub">Visualisez les liens familiaux</p>
+        </div>
+      </a>
+
+      <a href="gallery.html" class="card">
+        <div class="card-icon">📸</div>
+        <div class="card-body">
+          <h3 data-i18n="gallery">Galerie</h3>
+          <p data-i18n="gallerySub">Photos et documents de famille</p>
+        </div>
+      </a>
+
+      <a href="timeline.html" class="card">
+        <div class="card-icon">🕒</div>
+        <div class="card-body">
+          <h3 data-i18n="timeline">Frise Chronologique</h3>
+          <p data-i18n="timelineSub">L'histoire de la famille</p>
+        </div>
+      </a>
+
+      <a href="edit.html" class="card">
+        <div class="card-icon">➕</div>
+        <div class="card-body">
+          <h3 data-i18n="add">Ajouter une personne</h3>
+          <p data-i18n="addSub">Enrichir l'arbre familial</p>
+        </div>
+      </a>
+    </div>
   </main>
 
-  <!-- Scripts APRÈS le HTML -->
   <script src="js/firebase-init.js"></script>
   <script src="js/auth.js"></script>
   <script>
-    document.getElementById("logoutBtn").addEventListener("click", function() {
-      firebase.auth().signOut().then(function() {
-        window.location.href = "index.html";
+    const i18n = {
+      fr: {
+        title: "Famille Gonzalez",
+        logout: "Déconnexion",
+        welcome: "Bienvenue",
+        welcomeSub: "Que souhaitez-vous explorer ?",
+        tree: "Arbre Généalogique",
+        treeSub: "Visualisez les liens familiaux",
+        gallery: "Galerie",
+        gallerySub: "Photos et documents de famille",
+        timeline: "Frise Chronologique",
+        timelineSub: "L'histoire de la famille",
+        add: "Ajouter une personne",
+        addSub: "Enrichir l'arbre familial"
+      },
+      es: {
+        title: "Familia Gonzalez",
+        logout: "Cerrar sesión",
+        welcome: "Bienvenido",
+        welcomeSub: "¿Qué desea explorar?",
+        tree: "Árbol Genealógico",
+        treeSub: "Visualiza los vínculos familiares",
+        gallery: "Galería",
+        gallerySub: "Fotos y documentos de familia",
+        timeline: "Línea de Tiempo",
+        timelineSub: "La historia de la familia",
+        add: "Añadir una persona",
+        addSub: "Enriquecer el árbol familiar"
+      },
+      en: {
+        title: "Gonzalez Family",
+        logout: "Sign out",
+        welcome: "Welcome",
+        welcomeSub: "What would you like to explore?",
+        tree: "Family Tree",
+        treeSub: "Visualize family connections",
+        gallery: "Gallery",
+        gallerySub: "Family photos and documents",
+        timeline: "Timeline",
+        timelineSub: "The family history",
+        add: "Add a person",
+        addSub: "Enrich the family tree"
+      }
+    };
+
+    let currentLang = localStorage.getItem("lang") || "fr";
+
+    function setLang(lang) {
+      currentLang = lang;
+      localStorage.setItem("lang", lang);
+      document.querySelectorAll(".lang-btn").forEach(btn => {
+        btn.classList.toggle("active", btn.textContent === lang.toUpperCase());
       });
+      applyTranslations();
+    }
+
+    function applyTranslations() {
+      const t = i18n[currentLang];
+      document.querySelectorAll("[data-i18n]").forEach(el => {
+        const key = el.getAttribute("data-i18n");
+        if(t[key]) el.textContent = t[key];
+      });
+    }
+
+    setLang(currentLang);
+
+    document.getElementById("logoutBtn").addEventListener("click", function() {
+      firebase.auth().signOut().then(() => { window.location.href = "index.html"; });
     });
   </script>
 
