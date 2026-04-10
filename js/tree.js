@@ -1,5 +1,5 @@
-// ARBRE GÉNÉALOGIQUE v2.7.0
-const TREE_VERSION = "2.7.0";
+// ARBRE GÉNÉALOGIQUE v2.8.0
+const TREE_VERSION = "2.8.0";
 
 function v(x){ return x && typeof x === "string" && x.trim() ? x : null; }
 
@@ -14,7 +14,7 @@ function getInfo(p){
   return p.bd.split("-")[0] + " – " + p.dd.split("-")[0];
 }
 
-const NW = 140, NH = 72, HGAP = 18, CGAP = 8, VGAP = 90;
+const NW = 140, NH = 72, HGAP = 18, CGAP = 8, VGAP = 110;
 
 firebase.auth().onAuthStateChanged(async user=>{
   if(!user) return;
@@ -40,7 +40,7 @@ firebase.auth().onAuthStateChanged(async user=>{
 function drawTree(P){
   const ids = Object.keys(P);
 
-  /* ── GÉNÉRATIONS ─────────────────────────────────────── */
+  /* ── GÉNÉRATIONS ─────────────────────────────────── */
   const gen = {};
   ids.forEach(id=>{ if(!P[id].fid && !P[id].mid) gen[id] = 0; });
 
@@ -51,12 +51,10 @@ function drawTree(P){
       const p = P[id];
       const fg = p.fid && P[p.fid] ? gen[p.fid] : undefined;
       const mg = p.mid && P[p.mid] ? gen[p.mid] : undefined;
-
       if(fg !== undefined || mg !== undefined){
         const ng = Math.max(fg !== undefined ? fg : -1, mg !== undefined ? mg : -1) + 1;
         if(gen[id] !== ng){ gen[id] = ng; changed = true; }
       }
-
       if(p.sid && P[p.sid]){
         if(gen[id] !== undefined && gen[p.sid] !== undefined && gen[id] !== gen[p.sid]){
           const m = Math.max(gen[id], gen[p.sid]);
@@ -69,7 +67,7 @@ function drawTree(P){
   }
   ids.forEach(id=>{ if(gen[id] === undefined) gen[id] = 0; });
 
-  /* ── FAMILLES ────────────────────────────────────────── */
+  /* ── FAMILLES ────────────────────────────────────── */
   const fams = {};
   ids.forEach(id=>{
     const fid = P[id].fid && P[P[id].fid] ? P[id].fid : null;
@@ -80,7 +78,7 @@ function drawTree(P){
     fams[k].ch.push(id);
   });
 
-  /* ── SLOTS ───────────────────────────────────────────── */
+  /* ── SLOTS ───────────────────────────────────────── */
   const byGen = {};
   ids.forEach(id=>{
     if(!byGen[gen[id]]) byGen[gen[id]] = [];
@@ -111,7 +109,6 @@ function drawTree(P){
         if(!spDone.has(k)){ spDone.add(k); spLinks.push([id,sp]); }
       } else { slots.push([id]); used.add(id); }
     };
-
     withP.forEach(add);
     noP.forEach(id=>{
       if(used.has(id)) return;
@@ -122,11 +119,10 @@ function drawTree(P){
         if(!spDone.has(k)){ spDone.add(k); spLinks.push([id,sp]); }
       } else { slots.push([id]); used.add(id); }
     });
-
     slotsByGen[g] = slots;
   });
 
-  /* ── POSITIONS ───────────────────────────────────────── */
+  /* ── POSITIONS ───────────────────────────────────── */
   const pos = {};
   Object.keys(slotsByGen).sort((a,b)=>a-b).forEach(g=>{
     const slots = slotsByGen[g];
@@ -145,7 +141,7 @@ function drawTree(P){
     });
   });
 
-  /* ── SVG ─────────────────────────────────────────────── */
+  /* ── SVG ─────────────────────────────────────────── */
   const wrapper = document.getElementById("tree-container");
   const W = wrapper.clientWidth||window.innerWidth;
   const H = wrapper.clientHeight||window.innerHeight-56;
@@ -162,68 +158,117 @@ function drawTree(P){
   const g = svg.append("g").attr("transform",`translate(${W/2},40)`);
   svg.call(d3.zoom().scaleExtent([0.1,3]).on("zoom",e=>g.attr("transform",e.transform)));
 
-  /* ── LIENS CONJOINTS ─────────────────────────────────── */
+  /* ── LIENS CONJOINTS ─────────────────────────────── */
   spLinks.forEach(([a,b])=>{
-    const pa=pos[a],pb=pos[b]; if(!pa||!pb) return;
+    const pa=pos[a], pb=pos[b]; if(!pa||!pb) return;
     const lx=Math.min(pa.x,pb.x)+NW, rx=Math.max(pa.x,pb.x), y=pa.y+NH/2;
     g.append("line").attr("x1",lx).attr("y1",y).attr("x2",rx).attr("y2",y)
       .attr("stroke","#aaaacc").attr("stroke-width",1.5)
       .attr("stroke-dasharray","5,4").attr("fill","none");
   });
 
-  /* ── LIENS PARENT → ENFANT ───────────────────────────── */
-  Object.values(fams).forEach(({fid,mid,ch})=>{
-    const pf = fid ? pos[fid] : null;
-    const pm = mid ? pos[mid] : null;
-    if(!pf && !pm) return;
+  /* ── LIENS PARENT → ENFANT ───────────────────────── */
+  // Grouper les familles par génération enfant pour décaler les barres
+  // afin qu'elles ne se superposent pas
 
-    // Centre X du couple (milieu entre les deux parents)
-    const fCx = pf ? pf.x+NW/2 : null;
-    const mCx = pm ? pm.x+NW/2 : null;
-    const jX  = fCx!==null && mCx!==null ? (fCx+mCx)/2 : (fCx||mCx);
-    const pY  = (pf||pm).y + NH;
-    const jY  = pY + VGAP*0.4;
+  // D'abord, collecter toutes les familles avec leur génération enfant
+  const famsByChildGen = {};
+  Object.values(fams).forEach(fam=>{
+    if(!fam.ch.length) return;
+    const childGen = gen[fam.ch[0]];
+    if(!famsByChildGen[childGen]) famsByChildGen[childGen] = [];
+    famsByChildGen[childGen].push(fam);
+  });
 
-    // Lignes depuis chaque parent vers le point de jonction
-    if(fCx!==null)
-      g.append("path").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
-        .attr("d",`M${fCx},${pY} V${jY} H${jX}`);
-    if(mCx!==null && mCx!==fCx)
-      g.append("path").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
-        .attr("d",`M${mCx},${pY} V${jY} H${jX}`);
+  // Pour chaque génération d'enfants, décaler les barres verticalement
+  Object.keys(famsByChildGen).sort((a,b)=>a-b).forEach(childGen=>{
+    const famsAtLevel = famsByChildGen[childGen];
+    // Trier les familles par position X du père (ou mère)
+    famsAtLevel.sort((a,b)=>{
+      const xA = a.fid && pos[a.fid] ? pos[a.fid].x : (a.mid && pos[a.mid] ? pos[a.mid].x : 0);
+      const xB = b.fid && pos[b.fid] ? pos[b.fid].x : (b.mid && pos[b.mid] ? pos[b.mid].x : 0);
+      return xA - xB;
+    });
 
-    // Positions des enfants de CETTE famille uniquement
-    const cps = ch.map(cid=>pos[cid]).filter(Boolean);
-    if(!cps.length) return;
-    const cxs = cps.map(cp=>cp.x+NW/2);
-    const minCx = Math.min(...cxs);
-    const maxCx = Math.max(...cxs);
+    // Assigner un décalage vertical à chaque famille
+    // Familles non superposées = même décalage
+    // Familles dont les barres se chevauchent = décalages différents
+    const offsets = new Array(famsAtLevel.length).fill(0);
+    const STEP = 14; // pixels de décalage entre barres superposées
 
-    if(cps.length===1){
-      // Un enfant : ligne de jX vers l'enfant
-      g.append("line").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
-        .attr("x1",jX).attr("y1",jY).attr("x2",cxs[0]).attr("y2",jY);
-    } else {
-      // Plusieurs enfants : barre UNIQUEMENT entre min et max des enfants
-      g.append("line").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
-        .attr("x1",minCx).attr("y1",jY).attr("x2",maxCx).attr("y2",jY);
-      // Relier jX à la barre (si jX est hors de la barre)
-      if(jX < minCx)
-        g.append("line").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
-          .attr("x1",jX).attr("y1",jY).attr("x2",minCx).attr("y2",jY);
-      else if(jX > maxCx)
-        g.append("line").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
-          .attr("x1",maxCx).attr("y1",jY).attr("x2",jX).attr("y2",jY);
+    for(let i=0; i<famsAtLevel.length; i++){
+      const famI = famsAtLevel[i];
+      const cpsI = famI.ch.map(cid=>pos[cid]).filter(Boolean);
+      if(!cpsI.length) continue;
+      const minXI = Math.min(...cpsI.map(cp=>cp.x));
+      const maxXI = Math.max(...cpsI.map(cp=>cp.x+NW));
+
+      for(let j=0; j<i; j++){
+        const famJ = famsAtLevel[j];
+        const cpsJ = famJ.ch.map(cid=>pos[cid]).filter(Boolean);
+        if(!cpsJ.length) continue;
+        const minXJ = Math.min(...cpsJ.map(cp=>cp.x));
+        const maxXJ = Math.max(...cpsJ.map(cp=>cp.x+NW));
+
+        // Chevauchement horizontal ?
+        if(minXI <= maxXJ && maxXI >= minXJ){
+          offsets[i] = offsets[j] + STEP;
+        }
+      }
     }
 
-    // Descente vers chaque enfant
-    cps.forEach(cp=>{
-      g.append("line").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
-        .attr("x1",cp.x+NW/2).attr("y1",jY).attr("x2",cp.x+NW/2).attr("y2",cp.y);
+    famsAtLevel.forEach((fam, idx)=>{
+      const pf = fam.fid ? pos[fam.fid] : null;
+      const pm = fam.mid ? pos[fam.mid] : null;
+      if(!pf && !pm) return;
+
+      const fCx = pf ? pf.x+NW/2 : null;
+      const mCx = pm ? pm.x+NW/2 : null;
+      const jX  = fCx!==null && mCx!==null ? (fCx+mCx)/2 : (fCx||mCx);
+      const pY  = (pf||pm).y + NH;
+
+      // jY décalé selon l'index de la famille
+      const jY = pY + VGAP*0.25 + offsets[idx];
+
+      // Lignes depuis chaque parent vers jX
+      if(fCx!==null)
+        g.append("path").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
+          .attr("d",`M${fCx},${pY} V${jY} H${jX}`);
+      if(mCx!==null && mCx!==fCx)
+        g.append("path").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
+          .attr("d",`M${mCx},${pY} V${jY} H${jX}`);
+
+      const cps = fam.ch.map(cid=>pos[cid]).filter(Boolean);
+      if(!cps.length) return;
+      const cxs = cps.map(cp=>cp.x+NW/2);
+      const minCx = Math.min(...cxs);
+      const maxCx = Math.max(...cxs);
+
+      if(cps.length===1){
+        g.append("line").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
+          .attr("x1",jX).attr("y1",jY).attr("x2",cxs[0]).attr("y2",jY);
+      } else {
+        // Barre horizontale uniquement entre les enfants de cette famille
+        g.append("line").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
+          .attr("x1",minCx).attr("y1",jY).attr("x2",maxCx).attr("y2",jY);
+        // Relier jX à la barre si nécessaire
+        if(jX < minCx)
+          g.append("line").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
+            .attr("x1",jX).attr("y1",jY).attr("x2",minCx).attr("y2",jY);
+        else if(jX > maxCx)
+          g.append("line").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
+            .attr("x1",maxCx).attr("y1",jY).attr("x2",jX).attr("y2",jY);
+      }
+
+      // Descente vers chaque enfant
+      cps.forEach(cp=>{
+        g.append("line").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
+          .attr("x1",cp.x+NW/2).attr("y1",jY).attr("x2",cp.x+NW/2).attr("y2",cp.y);
+      });
     });
   });
 
-  /* ── NŒUDS ───────────────────────────────────────────── */
+  /* ── NŒUDS ───────────────────────────────────────── */
   ids.forEach(id=>{
     const p=P[id], pt=pos[id]; if(!pt) return;
 
