@@ -1,9 +1,14 @@
 const urlParams = new URLSearchParams(window.location.search);
 const personId = urlParams.get("id");
 
+// ── CLOUDINARY CONFIG ─────────────────────────────────────
+const CLOUDINARY_CLOUD = "dekk2a3i0";
+const CLOUDINARY_PRESET = "gonzalez_family";
+const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/image/upload`;
+
 let photoFile = null;
 let isAdmin = false;
-let allPersons = []; // Cache de toutes les personnes
+let allPersons = [];
 
 async function checkAdmin(email) {
   try {
@@ -32,8 +37,6 @@ firebase.auth().onAuthStateChanged(async function(user) {
 async function loadAllPersons() {
   try {
     const snapshot = await db.collection("persons").get();
-
-    // Construire la liste et trier par nom complet
     allPersons = [];
     snapshot.forEach(doc => {
       if (doc.id === personId) return;
@@ -46,15 +49,11 @@ async function loadAllPersons() {
         fullName: ((p.firstName || "") + " " + (p.lastName || "")).trim()
       });
     });
-
-    // Tri alphabétique par nom complet
     allPersons.sort((a, b) => a.fullName.localeCompare(b.fullName, "fr"));
 
-    // Remplir les selects
     const selects = ["fatherId", "motherId", "spouseId"];
     selects.forEach(selectId => {
       const select = document.getElementById(selectId);
-      // Garder l'option vide
       while (select.options.length > 1) select.remove(1);
       allPersons.forEach(p => {
         const option = document.createElement("option");
@@ -64,9 +63,7 @@ async function loadAllPersons() {
       });
     });
 
-    // Écouter les changements de père/mère pour auto-remplir le conjoint
     setupParentListeners();
-
   } catch (e) { console.error("loadAllPersons:", e.message); }
 }
 
@@ -80,35 +77,21 @@ function setupParentListeners() {
 }
 
 function autoFillSpouse() {
-  const fatherSelect = document.getElementById("fatherId");
-  const motherSelect = document.getElementById("motherId");
-  const spouseSelect = document.getElementById("spouseId");
+  const fatherId = document.getElementById("fatherId").value;
+  const motherId = document.getElementById("motherId").value;
 
-  const fatherId = fatherSelect.value;
-  const motherId = motherSelect.value;
-
-  // Si père sélectionné → chercher son conjoint
   if (fatherId) {
     const father = allPersons.find(p => p.id === fatherId);
-    if (father && father.spouseId) {
-      // Vérifier que le conjoint est dans la liste
+    if (father && father.spouseId && !motherId) {
       const spouseExists = allPersons.find(p => p.id === father.spouseId);
-      if (spouseExists && !motherId) {
-        motherSelect.value = father.spouseId;
-        return;
-      }
+      if (spouseExists) { document.getElementById("motherId").value = father.spouseId; return; }
     }
   }
-
-  // Si mère sélectionnée → chercher son conjoint
   if (motherId) {
     const mother = allPersons.find(p => p.id === motherId);
-    if (mother && mother.spouseId) {
+    if (mother && mother.spouseId && !fatherId) {
       const spouseExists = allPersons.find(p => p.id === mother.spouseId);
-      if (spouseExists && !fatherId) {
-        fatherSelect.value = mother.spouseId;
-        return;
-      }
+      if (spouseExists) { document.getElementById("fatherId").value = mother.spouseId; return; }
     }
   }
 }
@@ -142,9 +125,7 @@ async function loadPerson(id) {
 document.getElementById("photoInput").addEventListener("change", function(e) {
   const file = e.target.files[0];
   if (!file) return;
-  photoFile = file;
 
-  // Vérification type et taille
   if (!file.type.startsWith("image/")) {
     alert("Veuillez choisir une image (JPG, PNG...)");
     return;
@@ -154,6 +135,8 @@ document.getElementById("photoInput").addEventListener("change", function(e) {
     return;
   }
 
+  photoFile = file;
+
   const reader = new FileReader();
   reader.onload = function(ev) {
     const preview = document.getElementById("avatarPreview");
@@ -162,12 +145,29 @@ document.getElementById("photoInput").addEventListener("change", function(e) {
     preview.style.backgroundPosition = "center";
     preview.textContent = "";
   };
-  reader.onerror = function() {
-    alert("Impossible de lire l'image.");
-    photoFile = null;
-  };
   reader.readAsDataURL(file);
 });
+
+// ── Upload photo vers Cloudinary ──────────────────────────
+async function uploadPhoto(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("upload_preset", CLOUDINARY_PRESET);
+  formData.append("folder", "gonzalez_family");
+
+  const response = await fetch(CLOUDINARY_URL, {
+    method: "POST",
+    body: formData
+  });
+
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error("Cloudinary : " + (err.error?.message || "Erreur upload"));
+  }
+
+  const data = await response.json();
+  return data.secure_url;
+}
 
 // ── Soumission du formulaire ──────────────────────────────
 document.getElementById("personForm").addEventListener("submit", async function(e) {
@@ -181,8 +181,8 @@ document.getElementById("personForm").addEventListener("submit", async function(
   try {
     let photoURL = null;
 
-    // Upload photo
     if (photoFile) {
+      submitBtn.textContent = "📤 Upload...";
       photoURL = await uploadPhoto(photoFile);
     }
 
@@ -206,21 +206,14 @@ document.getElementById("personForm").addEventListener("submit", async function(
     let currentPersonId = personId;
 
     if (personId) {
-      // Récupérer l'ancien spouseId avant modification
       const oldDoc = await db.collection("persons").doc(personId).get();
       const oldSpouseId = oldDoc.exists ? (oldDoc.data().spouseId || null) : null;
-
       await db.collection("persons").doc(personId).update(data);
-
-      // Sync conjoint : mettre à jour la fiche du conjoint
       await syncSpouse(personId, oldSpouseId, newSpouseId);
-
     } else {
       data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
       const newDoc = await db.collection("persons").add(data);
       currentPersonId = newDoc.id;
-
-      // Sync conjoint pour la nouvelle personne
       await syncSpouse(currentPersonId, null, newSpouseId);
     }
 
@@ -234,58 +227,25 @@ document.getElementById("personForm").addEventListener("submit", async function(
   }
 });
 
-// ── Upload photo vers Firebase Storage ───────────────────
-async function uploadPhoto(file) {
-  return new Promise((resolve, reject) => {
-    const ext = file.name.split(".").pop().toLowerCase();
-    const fileName = "photos/" + Date.now() + "_" + Math.random().toString(36).substr(2, 6) + "." + ext;
-    const ref = storage.ref(fileName);
-    const uploadTask = ref.put(file);
-
-    uploadTask.on(
-      "state_changed",
-      null,
-      (error) => {
-        console.error("Upload error:", error);
-        reject(new Error("Erreur upload : " + error.message));
-      },
-      async () => {
-        try {
-          const url = await uploadTask.snapshot.ref.getDownloadURL();
-          resolve(url);
-        } catch (e) {
-          reject(e);
-        }
-      }
-    );
-  });
-}
-
 // ── Synchronisation du conjoint ───────────────────────────
-// Met à jour la fiche du conjoint pour refléter le lien réciproque
 async function syncSpouse(myId, oldSpouseId, newSpouseId) {
   try {
-    // Si l'ancien conjoint existait → enlever le lien de son côté
     if (oldSpouseId && oldSpouseId !== newSpouseId) {
-      const oldSpouseDoc = await db.collection("persons").doc(oldSpouseId).get();
-      if (oldSpouseDoc.exists && oldSpouseDoc.data().spouseId === myId) {
+      const oldDoc = await db.collection("persons").doc(oldSpouseId).get();
+      if (oldDoc.exists && oldDoc.data().spouseId === myId) {
         await db.collection("persons").doc(oldSpouseId).update({
           spouseId: null,
           updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
       }
     }
-
-    // Si nouveau conjoint → mettre à jour son spouseId
     if (newSpouseId && newSpouseId !== oldSpouseId) {
       await db.collection("persons").doc(newSpouseId).update({
         spouseId: myId,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       });
     }
-  } catch (e) {
-    console.error("syncSpouse error:", e.message);
-  }
+  } catch (e) { console.error("syncSpouse:", e.message); }
 }
 
 // ── Suppression ───────────────────────────────────────────
@@ -293,7 +253,6 @@ document.getElementById("deleteBtn").addEventListener("click", async function() 
   if (!isAdmin) { alert("⛔ Accès refusé."); return; }
   if (!confirm("Supprimer cette personne ? Cette action est irréversible.")) return;
   try {
-    // Nettoyer le lien conjoint avant suppression
     const doc = await db.collection("persons").doc(personId).get();
     if (doc.exists) {
       const spouseId = doc.data().spouseId;
