@@ -31,8 +31,7 @@
     .topbar {
       position: sticky; top: 0; z-index: 100;
       background: rgba(255,255,255,0.85);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
       border-bottom: 1px solid var(--border);
       display: flex; align-items: center; justify-content: space-between;
       padding: 0 32px; height: 56px;
@@ -52,8 +51,8 @@
       border: 1px solid var(--border); border-radius: 20px; padding: 3px; gap: 2px;
     }
     .lang-btn {
-      border: none; background: transparent; padding: 4px 12px; border-radius: 16px;
-      font-size: 12px; font-weight: 500; cursor: pointer; color: var(--muted); transition: all 0.2s;
+      border: none; background: transparent; padding: 4px 10px; border-radius: 16px;
+      font-size: 11px; font-weight: 500; cursor: pointer; color: var(--muted); transition: all 0.2s;
     }
     .lang-btn.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
 
@@ -168,6 +167,7 @@
     <div class="topbar-right">
       <div class="lang-switcher">
         <button class="lang-btn active" onclick="setLang('fr')">FR</button>
+        <button class="lang-btn" onclick="setLang('en')">EN</button>
         <button class="lang-btn" onclick="setLang('es')">ES</button>
       </div>
       <button class="btn-logout" id="logoutBtn" data-i18n="logout">Déconnexion</button>
@@ -267,6 +267,15 @@
         sectionDates: "Dates", birthDate: "Date de naissance", deathDate: "Date de décès",
         sectionRelations: "Relations familiales", father: "Père", mother: "Mère", spouse: "Conjoint(e)",
         sectionNotes: "Notes & Biographie", save: "Enregistrer", delete: "Supprimer"
+      },
+      en: {
+        back: "Back", addPerson: "Add a person", editPerson: "Edit person",
+        logout: "Sign out", photoTitle: "Profile photo", photoDesc: "JPG or PNG, max 5 MB",
+        choosePhoto: "Choose a photo", sectionIdentity: "Identity",
+        firstName: "First name", lastName: "Last name", nickname: "Nickname",
+        sectionDates: "Dates", birthDate: "Date of birth", deathDate: "Date of death",
+        sectionRelations: "Family relations", father: "Father", mother: "Mother", spouse: "Spouse",
+        sectionNotes: "Notes & Biography", save: "Save", delete: "Delete"
       },
       es: {
         back: "Volver", addPerson: "Añadir una persona", editPerson: "Modificar una persona",
