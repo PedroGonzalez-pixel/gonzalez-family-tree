@@ -9,6 +9,22 @@ function computeAge(bd) {
   return a;
 }
 
+function getInitials(firstName, lastName) {
+  const f = (firstName || "").trim()[0] || "";
+  const l = (lastName  || "").trim()[0] || "";
+  return (f + l).toUpperCase();
+}
+
+// Couleurs d'avatar par initiale
+function avatarColor(initials) {
+  const colors = [
+    "#a8c5e8","#a8e0c5","#e8c5a8","#c5a8e8",
+    "#e8a8c5","#c5e8a8","#e8e0a8","#a8d0e8"
+  ];
+  const code = (initials.charCodeAt(0) || 0) + (initials.charCodeAt(1) || 0);
+  return colors[code % colors.length];
+}
+
 firebase.auth().onAuthStateChanged(async user => {
   if (!user) return;
   try {
@@ -21,17 +37,17 @@ firebase.auth().onAuthStateChanged(async user => {
     const persons = [];
     snap.forEach(d => {
       const x = d.data();
-      const photoURL = v(x.photoURL);
-      if (!photoURL) return; // Ignorer sans photo
-
+      const bd = v(x.birthDate);
       persons.push({
-        id: d.id,
+        id:        d.id,
         firstName: x.firstName || "",
-        lastName: x.lastName || "",
-        fullName: ((x.firstName || "") + " " + (x.lastName || "")).trim(),
-        birthDate: v(x.birthDate),
+        lastName:  x.lastName  || "",
+        nickname:  v(x.nickname),
+        fullName:  ((x.firstName || "") + " " + (x.lastName || "")).trim(),
+        birthDate: bd,
         deathDate: v(x.deathDate),
-        photoURL
+        photoURL:  v(x.photoURL),
+        birthYear: bd ? parseInt(bd.split("-")[0]) : null
       });
     });
 
@@ -40,6 +56,7 @@ firebase.auth().onAuthStateChanged(async user => {
 
     document.getElementById("loadingMsg").style.display = "none";
     document.getElementById("trombiGrid").style.display = "grid";
+    document.getElementById("countBadge").style.display = "inline-flex";
 
     window._galleryData = persons;
     renderGallery(persons);
@@ -53,21 +70,16 @@ firebase.auth().onAuthStateChanged(async user => {
 function renderGallery(persons) {
   const grid = document.getElementById("trombiGrid");
   const lang = window.currentLang || "fr";
-  const t = window.i18n ? window.i18n[lang] : {
-    born: "Né(e) en", died: "† ", noPhoto: "Aucune photo.", age: "ans"
-  };
+  const t    = (window.i18n && window.i18n[lang]) || { age:"ans", noResults:"Aucun résultat." };
 
   // Compteur
-  const countBadge = document.getElementById("countBadge");
-  const countNum   = document.getElementById("countNum");
-  countBadge.style.display = "inline-flex";
-  countNum.textContent = persons.length;
+  document.getElementById("countNum").textContent = persons.length;
 
   if (persons.length === 0) {
     grid.innerHTML = `
       <div class="empty-state">
-        <div class="empty-icon">📷</div>
-        <p>${t.noPhoto}</p>
+        <div class="empty-icon">🔍</div>
+        <p>${t.noResults}</p>
       </div>`;
     return;
   }
@@ -75,31 +87,35 @@ function renderGallery(persons) {
   let html = "";
   persons.forEach((p, idx) => {
     const isDeceased = !!p.deathDate;
+    const initials   = getInitials(p.firstName, p.lastName);
+    const color      = avatarColor(initials);
 
-    // Info ligne sous le nom
+    // Photo ou avatar
+    let photoHTML;
+    if (p.photoURL) {
+      photoHTML = `<div class="card-photo" style="background-image:url('${p.photoURL}')">
+        ${isDeceased ? '<div class="deceased-badge">✝</div>' : ''}
+      </div>`;
+    } else {
+      photoHTML = `<div class="card-photo no-photo" style="background: linear-gradient(135deg, ${color}88 0%, ${color} 100%);">
+        <span class="avatar-initials">${initials}</span>
+        ${isDeceased ? '<div class="deceased-badge">✝</div>' : ''}
+      </div>`;
+    }
+
+    // Détail : âge ou années
     let detail = "";
     if (p.birthDate && !p.deathDate) {
       detail = computeAge(p.birthDate) + " " + t.age;
     } else if (p.birthDate && p.deathDate) {
-      const by = p.birthDate.split("-")[0];
-      const dy = p.deathDate.split("-")[0];
-      detail = by + " – " + dy;
-    } else if (p.birthDate) {
-      detail = t.born + " " + p.birthDate.split("-")[0];
+      detail = p.birthDate.split("-")[0] + " – " + p.deathDate.split("-")[0];
     }
 
-    const deceasedBadge = isDeceased
-      ? `<div class="deceased-badge">✝</div>` : "";
-
-    const nameClass = isDeceased ? "card-name deceased" : "card-name";
-
     html += `
-      <a href="person.html?id=${p.id}" class="person-card" style="animation-delay:${idx * 30}ms">
-        <div class="card-photo" style="background-image:url('${p.photoURL}')">
-          ${deceasedBadge}
-        </div>
+      <a href="person.html?id=${p.id}" class="person-card" style="animation-delay:${Math.min(idx,20)*25}ms">
+        ${photoHTML}
         <div class="card-info">
-          <div class="${nameClass}">${p.fullName}</div>
+          <div class="card-name${isDeceased?' deceased':''}">${p.fullName}</div>
           ${detail ? `<div class="card-detail">${detail}</div>` : ""}
         </div>
       </a>`;
