@@ -1,125 +1,390 @@
-// gallery.js — Trombinoscope Famille Gonzalez
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trombinoscope – Famille Gonzalez</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=Playfair+Display:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #f5f5f7; --surface: #ffffff; --border: #e0e0e5;
+      --text: #1d1d1f; --muted: #6e6e73; --accent: #0071e3;
+      --accent-hover: #0077ed; --danger: #ff3b30;
+      --radius: 16px; --radius-sm: 8px;
+      --shadow: 0 2px 20px rgba(0,0,0,0.06);
+      --shadow-hover: 0 8px 32px rgba(0,0,0,0.12);
+    }
+    body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 
-function v(x) { return x && typeof x === "string" && x.trim() ? x : null; }
+    /* TOPBAR */
+    .topbar {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(255,255,255,0.85);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 32px; height: 56px; gap: 8px;
+    }
+    .topbar-left { display: flex; align-items: center; gap: 12px; }
+    .topbar h1 { font-family: 'Playfair Display', serif; font-size: 17px; font-weight: 500; white-space: nowrap; }
+    .btn-back {
+      display: flex; align-items: center; gap: 6px; font-size: 14px;
+      color: var(--accent); text-decoration: none;
+      padding: 6px 10px; border-radius: var(--radius-sm); transition: background 0.15s;
+    }
+    .btn-back:hover { background: rgba(0,113,227,0.08); }
+    .topbar-right { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+    .lang-switcher {
+      display: flex; background: var(--bg);
+      border: 1px solid var(--border); border-radius: 20px; padding: 3px; gap: 2px;
+    }
+    .lang-btn {
+      border: none; background: transparent; padding: 4px 9px; border-radius: 16px;
+      font-size: 11px; font-weight: 500; cursor: pointer; color: var(--muted); transition: all 0.2s;
+    }
+    .lang-btn.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+    .btn-export {
+      display: flex; align-items: center; gap: 5px;
+      border: 1px solid var(--border); background: var(--surface);
+      padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 500;
+      color: var(--text); cursor: pointer; transition: all 0.15s; white-space: nowrap;
+      font-family: 'DM Sans', sans-serif;
+    }
+    .btn-export:hover { background: var(--bg); border-color: var(--accent); color: var(--accent); }
+    .btn-export.pdf { background: var(--accent); color: white; border-color: var(--accent); }
+    .btn-export.pdf:hover { background: var(--accent-hover); }
+    .btn-logout {
+      border: 1px solid var(--border); background: transparent;
+      padding: 6px 12px; border-radius: 20px; font-size: 12px;
+      color: var(--muted); cursor: pointer; transition: all 0.15s; white-space: nowrap;
+      font-family: 'DM Sans', sans-serif;
+    }
+    .btn-logout:hover { background: var(--bg); color: var(--text); }
 
-function computeAge(bd) {
-  const t = new Date(), b = new Date(bd);
-  let a = t.getFullYear() - b.getFullYear();
-  if (t.getMonth() < b.getMonth() || (t.getMonth() === b.getMonth() && t.getDate() < b.getDate())) a--;
-  return a;
-}
+    /* MAIN */
+    main { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
 
-function getInitials(firstName, lastName) {
-  const f = (firstName || "").trim()[0] || "";
-  const l = (lastName  || "").trim()[0] || "";
-  return (f + l).toUpperCase();
-}
+    .page-header { margin-bottom: 28px; }
+    .page-header h2 { font-family: 'Playfair Display', serif; font-size: 28px; font-weight: 500; margin-bottom: 6px; }
+    .page-header p { font-size: 14px; color: var(--muted); }
+    .count-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 20px; padding: 4px 14px; margin-top: 10px;
+      font-size: 13px; color: var(--muted);
+    }
+    .count-badge strong { color: var(--text); }
 
-// Couleurs d'avatar par initiale
-function avatarColor(initials) {
-  const colors = [
-    "#a8c5e8","#a8e0c5","#e8c5a8","#c5a8e8",
-    "#e8a8c5","#c5e8a8","#e8e0a8","#a8d0e8"
-  ];
-  const code = (initials.charCodeAt(0) || 0) + (initials.charCodeAt(1) || 0);
-  return colors[code % colors.length];
-}
+    /* SEARCH & FILTERS */
+    .filters-panel {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 20px 24px;
+      margin-bottom: 28px; box-shadow: var(--shadow);
+    }
+    .filters-row {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;
+    }
+    .filters-row:last-child { margin-bottom: 0; }
+    .filters-row-3 { grid-template-columns: 1fr 1fr 1fr; }
+    .filter-group { display: flex; flex-direction: column; gap: 5px; }
+    .filter-group label { font-size: 12px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .filter-group input, .filter-group select {
+      padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+      font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--text);
+      background: var(--bg); outline: none; transition: border-color 0.2s, box-shadow 0.2s;
+      appearance: none; -webkit-appearance: none;
+    }
+    .filter-group input:focus, .filter-group select:focus {
+      border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,113,227,0.1);
+      background: var(--surface);
+    }
+    .filter-group select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236e6e73' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px;
+    }
+    .filters-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
+    .btn-reset {
+      border: 1px solid var(--border); background: transparent;
+      padding: 8px 18px; border-radius: 20px; font-size: 13px;
+      color: var(--muted); cursor: pointer; transition: all 0.15s;
+      font-family: 'DM Sans', sans-serif;
+    }
+    .btn-reset:hover { background: var(--bg); color: var(--text); }
+    .btn-search {
+      background: var(--accent); color: white; border: none;
+      padding: 8px 22px; border-radius: 20px; font-size: 13px; font-weight: 500;
+      cursor: pointer; transition: background 0.15s; font-family: 'DM Sans', sans-serif;
+    }
+    .btn-search:hover { background: var(--accent-hover); }
 
-firebase.auth().onAuthStateChanged(async user => {
-  if (!user) return;
-  try {
-    const snap = await db.collection("persons").get();
-    if (snap.empty) {
-      document.getElementById("loadingMsg").textContent = "Aucune personne.";
-      return;
+    /* LOADING */
+    .loading { display: flex; align-items: center; justify-content: center; height: 200px; color: var(--muted); font-size: 15px; }
+
+    /* GRID */
+    .trombi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+      gap: 18px;
     }
 
-    const persons = [];
-    snap.forEach(d => {
-      const x = d.data();
-      const bd = v(x.birthDate);
-      persons.push({
-        id:        d.id,
-        firstName: x.firstName || "",
-        lastName:  x.lastName  || "",
-        nickname:  v(x.nickname),
-        fullName:  ((x.firstName || "") + " " + (x.lastName || "")).trim(),
-        birthDate: bd,
-        deathDate: v(x.deathDate),
-        photoURL:  v(x.photoURL),
-        birthYear: bd ? parseInt(bd.split("-")[0]) : null
+    /* CARD */
+    .person-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden; cursor: pointer;
+      text-decoration: none; color: var(--text);
+      transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+      box-shadow: var(--shadow); display: flex; flex-direction: column;
+      animation: fadeUp 0.35s ease forwards; opacity: 0;
+    }
+    .person-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-hover); border-color: var(--accent); }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .card-photo {
+      width: 100%; aspect-ratio: 1;
+      background-size: cover; background-position: center top;
+      position: relative; overflow: hidden;
+    }
+    /* Avatar par défaut */
+    .card-photo.no-photo {
+      display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #e8e8ed 0%, #d0d0d8 100%);
+    }
+    .avatar-initials {
+      font-size: 36px; font-weight: 500; color: #8e8e93;
+      font-family: 'Playfair Display', serif;
+      user-select: none;
+    }
+    .deceased-badge {
+      position: absolute; bottom: 8px; right: 8px;
+      background: rgba(0,0,0,0.45); color: white; font-size: 13px;
+      width: 26px; height: 26px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+    .card-info { padding: 12px 14px 14px; }
+    .card-name { font-size: 13px; font-weight: 500; line-height: 1.3; margin-bottom: 3px; }
+    .card-name.deceased { color: var(--muted); }
+    .card-detail { font-size: 11px; color: var(--muted); }
+
+    /* EMPTY */
+    .empty-state { grid-column: 1/-1; text-align: center; padding: 60px 20px; color: var(--muted); }
+    .empty-icon { font-size: 40px; margin-bottom: 12px; }
+
+    @media (max-width: 700px) {
+      .topbar { padding: 0 12px; }
+      .topbar h1 { display: none; }
+      main { padding: 24px 14px 60px; }
+      .filters-row, .filters-row-3 { grid-template-columns: 1fr; }
+      .trombi-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; }
+    }
+
+    @media print {
+      .topbar, .filters-panel { display: none !important; }
+      .person-card { break-inside: avoid; animation: none; opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="topbar-left">
+      <a href="dashboard.html" class="btn-back">
+        <svg width="7" height="12" viewBox="0 0 7 12" fill="none">
+          <path d="M6 1L1 6l5 5" stroke="#0071e3" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span data-i18n="back">Retour</span>
+      </a>
+      <h1 data-i18n="title">Trombinoscope</h1>
+    </div>
+    <div class="topbar-right">
+      <div class="lang-switcher">
+        <button class="lang-btn active" onclick="setLang('fr')">FR</button>
+        <button class="lang-btn" onclick="setLang('en')">EN</button>
+        <button class="lang-btn" onclick="setLang('es')">ES</button>
+      </div>
+      <button class="btn-export pdf" id="btnPDF">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M6.5 1v7M4 5.5l2.5 2.5L9 5.5M1 10v1a1 1 0 001 1h9a1 1 0 001-1v-1" stroke="white" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        PDF
+      </button>
+      <button class="btn-export" id="btnCSV">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M6.5 1v7M4 5.5l2.5 2.5L9 5.5M1 10v1a1 1 0 001 1h9a1 1 0 001-1v-1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        CSV
+      </button>
+      <button class="btn-logout" id="logoutBtn" data-i18n="logout">Déconnexion</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="page-header">
+      <h2 data-i18n="pageTitle">La Famille</h2>
+      <p data-i18n="pageSubtitle">Portraits de la famille Gonzalez</p>
+      <div class="count-badge" id="countBadge" style="display:none;">
+        <strong id="countNum">0</strong>&nbsp;<span data-i18n="members">membres affichés</span>
+      </div>
+    </div>
+
+    <!-- FILTRES -->
+    <div class="filters-panel">
+      <div class="filters-row">
+        <div class="filter-group">
+          <label data-i18n="filterFirstName">Prénom</label>
+          <input type="text" id="filterFirstName" placeholder="Rechercher...">
+        </div>
+        <div class="filter-group">
+          <label data-i18n="filterLastName">Nom</label>
+          <input type="text" id="filterLastName" placeholder="Rechercher...">
+        </div>
+      </div>
+      <div class="filters-row filters-row-3">
+        <div class="filter-group">
+          <label data-i18n="filterBirthFrom">Naissance — de</label>
+          <input type="number" id="filterBirthFrom" placeholder="1900" min="1800" max="2100">
+        </div>
+        <div class="filter-group">
+          <label data-i18n="filterBirthTo">Naissance — à</label>
+          <input type="number" id="filterBirthTo" placeholder="2024" min="1800" max="2100">
+        </div>
+        <div class="filter-group">
+          <label data-i18n="filterStatus">Statut</label>
+          <select id="filterStatus">
+            <option value="" data-i18n="filterStatusAll">Tous</option>
+            <option value="living" data-i18n="filterStatusLiving">Vivants</option>
+            <option value="deceased" data-i18n="filterStatusDeceased">Décédés</option>
+          </select>
+        </div>
+      </div>
+      <div class="filters-actions">
+        <button class="btn-reset" id="btnReset" data-i18n="reset">Réinitialiser</button>
+        <button class="btn-search" id="btnSearch" data-i18n="search">Rechercher</button>
+      </div>
+    </div>
+
+    <div class="loading" id="loadingMsg">Chargement...</div>
+    <div class="trombi-grid" id="trombiGrid" style="display:none;"></div>
+  </main>
+
+  <script src="js/firebase-init.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/gallery.js"></script>
+  <script>
+    const i18n = {
+      fr: {
+        back:"Retour", title:"Trombinoscope", logout:"Déconnexion",
+        pageTitle:"La Famille", pageSubtitle:"Portraits de la famille Gonzalez",
+        members:"membres affichés", age:"ans", noResults:"Aucun résultat.",
+        filterFirstName:"Prénom", filterLastName:"Nom",
+        filterBirthFrom:"Naissance — de", filterBirthTo:"Naissance — à",
+        filterStatus:"Statut", filterStatusAll:"Tous",
+        filterStatusLiving:"Vivants", filterStatusDeceased:"Décédés",
+        reset:"Réinitialiser", search:"Rechercher"
+      },
+      en: {
+        back:"Back", title:"Family portraits", logout:"Sign out",
+        pageTitle:"The Family", pageSubtitle:"Gonzalez family portraits",
+        members:"members shown", age:"years old", noResults:"No results.",
+        filterFirstName:"First name", filterLastName:"Last name",
+        filterBirthFrom:"Born from", filterBirthTo:"Born to",
+        filterStatus:"Status", filterStatusAll:"All",
+        filterStatusLiving:"Living", filterStatusDeceased:"Deceased",
+        reset:"Reset", search:"Search"
+      },
+      es: {
+        back:"Volver", title:"Directorio", logout:"Cerrar sesión",
+        pageTitle:"La Familia", pageSubtitle:"Retratos de la familia Gonzalez",
+        members:"miembros mostrados", age:"años", noResults:"Sin resultados.",
+        filterFirstName:"Nombre", filterLastName:"Apellido",
+        filterBirthFrom:"Nacido desde", filterBirthTo:"Nacido hasta",
+        filterStatus:"Estado", filterStatusAll:"Todos",
+        filterStatusLiving:"Vivos", filterStatusDeceased:"Fallecidos",
+        reset:"Restablecer", search:"Buscar"
+      }
+    };
+
+    let currentLang = localStorage.getItem("lang") || "fr";
+
+    function setLang(lang) {
+      currentLang = lang;
+      localStorage.setItem("lang", lang);
+      document.querySelectorAll(".lang-btn").forEach(btn =>
+        btn.classList.toggle("active", btn.textContent === lang.toUpperCase())
+      );
+      document.querySelectorAll("[data-i18n]").forEach(el => {
+        const k = el.getAttribute("data-i18n");
+        if (i18n[lang][k]) el.textContent = i18n[lang][k];
       });
+      if (window._galleryData) applyFilters();
+    }
+
+    setLang(currentLang);
+
+    document.getElementById("logoutBtn").addEventListener("click", () =>
+      firebase.auth().signOut().then(() => window.location.href = "index.html")
+    );
+    document.getElementById("btnPDF").addEventListener("click", () => window.print());
+    document.getElementById("btnCSV").addEventListener("click", exportCSV);
+    document.getElementById("btnSearch").addEventListener("click", applyFilters);
+    document.getElementById("btnReset").addEventListener("click", resetFilters);
+
+    // Recherche en temps réel sur prénom/nom
+    ["filterFirstName","filterLastName"].forEach(id => {
+      document.getElementById(id).addEventListener("input", applyFilters);
     });
 
-    // Tri alphabétique
-    persons.sort((a, b) => a.fullName.localeCompare(b.fullName, "fr"));
+    function applyFilters() {
+      if (!window._galleryData) return;
+      const fn  = document.getElementById("filterFirstName").value.toLowerCase().trim();
+      const ln  = document.getElementById("filterLastName").value.toLowerCase().trim();
+      const bFrom = parseInt(document.getElementById("filterBirthFrom").value) || 0;
+      const bTo   = parseInt(document.getElementById("filterBirthTo").value)   || 9999;
+      const st  = document.getElementById("filterStatus").value;
 
-    document.getElementById("loadingMsg").style.display = "none";
-    document.getElementById("trombiGrid").style.display = "grid";
-    document.getElementById("countBadge").style.display = "inline-flex";
+      const filtered = window._galleryData.filter(p => {
+        if (fn && !p.firstName.toLowerCase().includes(fn)) return false;
+        if (ln && !p.lastName.toLowerCase().includes(ln))  return false;
+        if (p.birthYear && (p.birthYear < bFrom || p.birthYear > bTo)) return false;
+        if (st === "living"   &&  p.deathDate) return false;
+        if (st === "deceased" && !p.deathDate) return false;
+        return true;
+      });
 
-    window._galleryData = persons;
-    renderGallery(persons);
-
-  } catch (e) {
-    document.getElementById("loadingMsg").textContent = "Erreur : " + e.message;
-    console.error(e);
-  }
-});
-
-function renderGallery(persons) {
-  const grid = document.getElementById("trombiGrid");
-  const lang = window.currentLang || "fr";
-  const t    = (window.i18n && window.i18n[lang]) || { age:"ans", noResults:"Aucun résultat." };
-
-  // Compteur
-  document.getElementById("countNum").textContent = persons.length;
-
-  if (persons.length === 0) {
-    grid.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-icon">🔍</div>
-        <p>${t.noResults}</p>
-      </div>`;
-    return;
-  }
-
-  let html = "";
-  persons.forEach((p, idx) => {
-    const isDeceased = !!p.deathDate;
-    const initials   = getInitials(p.firstName, p.lastName);
-    const color      = avatarColor(initials);
-
-    // Photo ou avatar
-    let photoHTML;
-    if (p.photoURL) {
-      photoHTML = `<div class="card-photo" style="background-image:url('${p.photoURL}')">
-        ${isDeceased ? '<div class="deceased-badge">✝</div>' : ''}
-      </div>`;
-    } else {
-      photoHTML = `<div class="card-photo no-photo" style="background: linear-gradient(135deg, ${color}88 0%, ${color} 100%);">
-        <span class="avatar-initials">${initials}</span>
-        ${isDeceased ? '<div class="deceased-badge">✝</div>' : ''}
-      </div>`;
+      renderGallery(filtered);
     }
 
-    // Détail : âge ou années
-    let detail = "";
-    if (p.birthDate && !p.deathDate) {
-      detail = computeAge(p.birthDate) + " " + t.age;
-    } else if (p.birthDate && p.deathDate) {
-      detail = p.birthDate.split("-")[0] + " – " + p.deathDate.split("-")[0];
+    function resetFilters() {
+      document.getElementById("filterFirstName").value = "";
+      document.getElementById("filterLastName").value  = "";
+      document.getElementById("filterBirthFrom").value = "";
+      document.getElementById("filterBirthTo").value   = "";
+      document.getElementById("filterStatus").value    = "";
+      if (window._galleryData) renderGallery(window._galleryData);
     }
 
-    html += `
-      <a href="person.html?id=${p.id}" class="person-card" style="animation-delay:${Math.min(idx,20)*25}ms">
-        ${photoHTML}
-        <div class="card-info">
-          <div class="card-name${isDeceased?' deceased':''}">${p.fullName}</div>
-          ${detail ? `<div class="card-detail">${detail}</div>` : ""}
-        </div>
-      </a>`;
-  });
-
-  grid.innerHTML = html;
-}
+    function exportCSV() {
+      if (!window._galleryData) return;
+      const t = i18n[currentLang];
+      const headers = ["Prénom","Nom","Surnom","Naissance","Décès","Photo"];
+      const rows = window._galleryData.map(p => [
+        p.firstName, p.lastName, p.nickname||"",
+        p.birthDate||"", p.deathDate||"", p.photoURL||""
+      ]);
+      const csv = [headers, ...rows]
+        .map(row => row.map(c => `"${String(c).replace(/"/g,'""')}"`).join(","))
+        .join("\n");
+      const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href = url; a.download = "famille_gonzalez.csv";
+      a.click(); URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>
