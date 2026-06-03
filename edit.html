@@ -13,25 +13,15 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg: #f5f5f7;
-      --surface: #ffffff;
-      --surface2: #f9f9fb;
-      --border: #e0e0e5;
-      --text: #1d1d1f;
-      --muted: #6e6e73;
-      --accent: #0071e3;
-      --accent-hover: #0077ed;
-      --danger: #ff3b30;
-      --radius: 12px;
-      --radius-sm: 8px;
-      --shadow: 0 2px 20px rgba(0,0,0,0.06);
+      --bg: #f5f5f7; --surface: #ffffff; --surface2: #f9f9fb;
+      --border: #e0e0e5; --text: #1d1d1f; --muted: #6e6e73;
+      --accent: #0071e3; --accent-hover: #0077ed; --danger: #ff3b30;
+      --radius: 12px; --radius-sm: 8px; --shadow: 0 2px 20px rgba(0,0,0,0.06);
     }
     body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
-
     .topbar {
       position: sticky; top: 0; z-index: 100;
-      background: rgba(255,255,255,0.85);
-      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      background: rgba(255,255,255,0.85); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
       border-bottom: 1px solid var(--border);
       display: flex; align-items: center; justify-content: space-between;
       padding: 0 32px; height: 56px;
@@ -39,115 +29,76 @@
     .topbar-left { display: flex; align-items: center; gap: 12px; }
     .topbar h1 { font-family: 'Playfair Display', serif; font-size: 17px; font-weight: 500; }
     .btn-back {
-      display: flex; align-items: center; gap: 6px;
-      font-size: 14px; color: var(--accent); text-decoration: none;
-      padding: 6px 10px; border-radius: var(--radius-sm); transition: background 0.15s;
+      display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--accent);
+      text-decoration: none; padding: 6px 10px; border-radius: var(--radius-sm); transition: background 0.15s;
     }
     .btn-back:hover { background: rgba(0,113,227,0.08); }
     .topbar-right { display: flex; align-items: center; gap: 12px; }
-
-    .lang-switcher {
-      display: flex; background: var(--bg);
-      border: 1px solid var(--border); border-radius: 20px; padding: 3px; gap: 2px;
-    }
-    .lang-btn {
-      border: none; background: transparent; padding: 4px 10px; border-radius: 16px;
-      font-size: 11px; font-weight: 500; cursor: pointer; color: var(--muted); transition: all 0.2s;
-    }
+    .lang-switcher { display: flex; background: var(--bg); border: 1px solid var(--border); border-radius: 20px; padding: 3px; gap: 2px; }
+    .lang-btn { border: none; background: transparent; padding: 4px 10px; border-radius: 16px; font-size: 11px; font-weight: 500; cursor: pointer; color: var(--muted); transition: all 0.2s; }
     .lang-btn.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
-
-    .btn-logout {
-      border: 1px solid var(--border); background: transparent;
-      padding: 6px 14px; border-radius: 20px; font-size: 13px;
-      color: var(--muted); cursor: pointer; transition: all 0.15s;
-    }
+    .btn-logout { border: 1px solid var(--border); background: transparent; padding: 6px 14px; border-radius: 20px; font-size: 13px; color: var(--muted); cursor: pointer; transition: all 0.15s; font-family: 'DM Sans', sans-serif; }
     .btn-logout:hover { background: var(--bg); color: var(--text); }
-
     main { max-width: 680px; margin: 40px auto; padding: 0 20px 80px; }
-
-    .page-title {
-      font-family: 'Playfair Display', serif; font-size: 28px;
-      font-weight: 500; margin-bottom: 32px;
-    }
-
-    .photo-section {
-      display: flex; align-items: center; gap: 24px;
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--radius); padding: 24px; margin-bottom: 16px;
-      box-shadow: var(--shadow);
-    }
-    .avatar-circle {
-      width: 80px; height: 80px; border-radius: 50%;
-      background: var(--bg); border: 2px dashed var(--border);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 28px; overflow: hidden; flex-shrink: 0;
-      background-size: cover; background-position: center;
-      cursor: pointer; transition: border-color 0.2s;
-    }
+    .page-title { font-family: 'Playfair Display', serif; font-size: 28px; font-weight: 500; margin-bottom: 32px; }
+    .photo-section { display: flex; align-items: center; gap: 24px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; margin-bottom: 16px; box-shadow: var(--shadow); }
+    .avatar-circle { width: 80px; height: 80px; border-radius: 50%; background: var(--bg); border: 2px dashed var(--border); display: flex; align-items: center; justify-content: center; font-size: 28px; overflow: hidden; flex-shrink: 0; background-size: cover; background-position: center; cursor: pointer; transition: border-color 0.2s; }
     .avatar-circle:hover { border-color: var(--accent); }
     .photo-info h3 { font-size: 15px; font-weight: 500; margin-bottom: 4px; }
     .photo-info p { font-size: 13px; color: var(--muted); margin-bottom: 12px; }
-    .btn-upload {
-      display: inline-block; background: var(--accent); color: white;
-      padding: 8px 18px; border-radius: 20px; font-size: 13px;
-      font-weight: 500; cursor: pointer; transition: background 0.15s;
-    }
+    .btn-upload { display: inline-block; background: var(--accent); color: white; padding: 8px 18px; border-radius: 20px; font-size: 13px; font-weight: 500; cursor: pointer; transition: background 0.15s; }
     .btn-upload:hover { background: var(--accent-hover); }
-
-    .form-card {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--radius); padding: 24px; margin-bottom: 16px;
-      box-shadow: var(--shadow);
-    }
-    .form-card h2 {
-      font-size: 12px; font-weight: 500; text-transform: uppercase;
-      letter-spacing: 0.07em; color: var(--muted); margin-bottom: 20px;
-    }
+    .form-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; margin-bottom: 16px; box-shadow: var(--shadow); }
+    .form-card h2 { font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 20px; }
     .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
     .form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
     .form-group:last-child { margin-bottom: 0; }
     label { font-size: 13px; font-weight: 500; color: var(--muted); }
-
     input[type="text"], input[type="date"], select, textarea {
-      width: 100%; padding: 11px 14px;
-      border: 1px solid var(--border); border-radius: var(--radius-sm);
-      font-family: 'DM Sans', sans-serif; font-size: 15px;
-      color: var(--text); background: var(--surface2);
-      transition: border-color 0.2s, box-shadow 0.2s;
-      outline: none; appearance: none; -webkit-appearance: none;
+      width: 100%; padding: 11px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+      font-family: 'DM Sans', sans-serif; font-size: 15px; color: var(--text); background: var(--surface2);
+      transition: border-color 0.2s, box-shadow 0.2s; outline: none; appearance: none; -webkit-appearance: none;
     }
-    input:focus, select:focus, textarea:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(0,113,227,0.12);
-      background: var(--surface);
-    }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,113,227,0.12); background: var(--surface); }
     select {
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236e6e73' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
       background-repeat: no-repeat; background-position: right 14px center; padding-right: 38px;
     }
     textarea { resize: vertical; min-height: 100px; line-height: 1.6; }
 
-    .form-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 8px; }
-    .btn-primary {
-      background: var(--accent); color: white; border: none;
-      padding: 12px 28px; border-radius: 24px;
-      font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 500;
-      cursor: pointer; transition: background 0.15s, transform 0.1s;
+    /* CONJOINTS */
+    .spouse-list { display: flex; flex-direction: column; gap: 12px; }
+    .spouse-row {
+      background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+      padding: 14px 16px; position: relative;
     }
+    .spouse-row-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .spouse-row-title { font-size: 13px; font-weight: 500; color: var(--muted); }
+    .btn-remove-spouse {
+      background: none; border: none; cursor: pointer; color: var(--danger);
+      font-size: 18px; line-height: 1; padding: 0 4px; transition: opacity 0.15s;
+    }
+    .btn-remove-spouse:hover { opacity: 0.7; }
+    .btn-add-spouse {
+      display: flex; align-items: center; gap: 8px;
+      background: none; border: 1.5px dashed var(--border); border-radius: var(--radius-sm);
+      padding: 10px 16px; width: 100%; cursor: pointer; color: var(--accent);
+      font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500;
+      transition: border-color 0.2s, background 0.15s;
+    }
+    .btn-add-spouse:hover { border-color: var(--accent); background: rgba(0,113,227,0.04); }
+
+    .form-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 8px; }
+    .btn-primary { background: var(--accent); color: white; border: none; padding: 12px 28px; border-radius: 24px; font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 500; cursor: pointer; transition: background 0.15s, transform 0.1s; }
     .btn-primary:hover { background: var(--accent-hover); }
     .btn-primary:active { transform: scale(0.98); }
     .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
-    .btn-danger {
-      background: transparent; color: var(--danger);
-      border: 1px solid rgba(255,59,48,0.3);
-      padding: 12px 24px; border-radius: 24px;
-      font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 500;
-      cursor: pointer; transition: all 0.15s;
-    }
+    .btn-danger { background: transparent; color: var(--danger); border: 1px solid rgba(255,59,48,0.3); padding: 12px 24px; border-radius: 24px; font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
     .btn-danger:hover { background: rgba(255,59,48,0.06); }
 
     @media (max-width: 600px) {
-      .form-row { grid-template-columns: 1fr; }
+      .form-row, .form-row-3 { grid-template-columns: 1fr; }
       main { margin: 24px auto; }
       .topbar { padding: 0 16px; }
       .topbar h1 { display: none; }
@@ -155,7 +106,6 @@
   </style>
 </head>
 <body>
-
   <header class="topbar">
     <div class="topbar-left">
       <a href="dashboard.html" class="btn-back">
@@ -176,9 +126,9 @@
 
   <main>
     <h1 class="page-title" id="pageTitleMain" data-i18n="addPerson">Ajouter une personne</h1>
-
     <form id="personForm">
 
+      <!-- Photo -->
       <div class="photo-section">
         <div class="avatar-circle" id="avatarPreview" onclick="document.getElementById('photoInput').click()">📷</div>
         <div class="photo-info">
@@ -191,24 +141,26 @@
         </div>
       </div>
 
+      <!-- Identité -->
       <div class="form-card">
         <h2 data-i18n="sectionIdentity">Identité</h2>
         <div class="form-row">
           <div class="form-group">
             <label data-i18n="firstName">Prénom</label>
-            <input type="text" id="firstName" placeholder="Prénom" required>
+            <input type="text" id="firstName" required>
           </div>
           <div class="form-group">
             <label data-i18n="lastName">Nom</label>
-            <input type="text" id="lastName" placeholder="Nom de famille" required>
+            <input type="text" id="lastName" required>
           </div>
         </div>
         <div class="form-group">
-          <label data-i18n="nickname">Surnom / Pseudo</label>
-          <input type="text" id="nickname" placeholder="Surnom ou pseudo">
+          <label data-i18n="nickname">Surnom</label>
+          <input type="text" id="nickname">
         </div>
       </div>
 
+      <!-- Dates -->
       <div class="form-card">
         <h2 data-i18n="sectionDates">Dates</h2>
         <div class="form-row">
@@ -223,8 +175,9 @@
         </div>
       </div>
 
+      <!-- Parents -->
       <div class="form-card">
-        <h2 data-i18n="sectionRelations">Relations familiales</h2>
+        <h2 data-i18n="sectionParents">Parents</h2>
         <div class="form-group">
           <label data-i18n="father">Père</label>
           <select id="fatherId"><option value="">— Sélectionner —</option></select>
@@ -233,16 +186,23 @@
           <label data-i18n="mother">Mère</label>
           <select id="motherId"><option value="">— Sélectionner —</option></select>
         </div>
-        <div class="form-group">
-          <label data-i18n="spouse">Conjoint(e)</label>
-          <select id="spouseId"><option value="">— Sélectionner —</option></select>
-        </div>
       </div>
 
+      <!-- Conjoints -->
+      <div class="form-card">
+        <h2 data-i18n="sectionSpouses">Conjoint(s)</h2>
+        <div class="spouse-list" id="spouseList"></div>
+        <button type="button" class="btn-add-spouse" id="btnAddSpouse" style="margin-top:12px;">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1v12M1 7h12" stroke="#0071e3" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <span data-i18n="addSpouse">Ajouter un conjoint</span>
+        </button>
+      </div>
+
+      <!-- Notes -->
       <div class="form-card">
         <h2 data-i18n="sectionNotes">Notes & Biographie</h2>
         <div class="form-group">
-          <textarea id="notes" placeholder="Anecdotes, histoire, souvenirs..." rows="5"></textarea>
+          <textarea id="notes" rows="5"></textarea>
         </div>
       </div>
 
@@ -250,7 +210,6 @@
         <button type="button" class="btn-danger" id="deleteBtn" style="display:none;" data-i18n="delete">Supprimer</button>
         <button type="submit" class="btn-primary" id="submitBtn" data-i18n="save">Enregistrer</button>
       </div>
-
     </form>
   </main>
 
@@ -260,31 +219,43 @@
   <script>
     const i18n = {
       fr: {
-        back: "Retour", addPerson: "Ajouter une personne", editPerson: "Modifier une personne",
-        logout: "Déconnexion", photoTitle: "Photo de profil", photoDesc: "JPG ou PNG, max 5 Mo",
-        choosePhoto: "Choisir une photo", sectionIdentity: "Identité",
-        firstName: "Prénom", lastName: "Nom", nickname: "Surnom / Pseudo",
-        sectionDates: "Dates", birthDate: "Date de naissance", deathDate: "Date de décès",
-        sectionRelations: "Relations familiales", father: "Père", mother: "Mère", spouse: "Conjoint(e)",
-        sectionNotes: "Notes & Biographie", save: "Enregistrer", delete: "Supprimer"
+        back:"Retour", addPerson:"Ajouter une personne", editPerson:"Modifier une personne",
+        logout:"Déconnexion", photoTitle:"Photo de profil", photoDesc:"JPG ou PNG, max 5 Mo",
+        choosePhoto:"Choisir une photo", sectionIdentity:"Identité",
+        firstName:"Prénom", lastName:"Nom", nickname:"Surnom",
+        sectionDates:"Dates", birthDate:"Date de naissance", deathDate:"Date de décès",
+        sectionParents:"Parents", father:"Père", mother:"Mère",
+        sectionSpouses:"Conjoint(s)", addSpouse:"Ajouter un conjoint",
+        spouseLabel:"Conjoint(e)", marriageDate:"Date de mariage", divorceDate:"Date de fin",
+        endReason:"Motif de fin", endReasonNone:"Toujours ensemble", endReasonDeath:"Veuf/Veuve", endReasonDivorce:"Divorce/Séparation",
+        sectionNotes:"Notes & Biographie", save:"Enregistrer", delete:"Supprimer",
+        selectPerson:"— Sélectionner —"
       },
       en: {
-        back: "Back", addPerson: "Add a person", editPerson: "Edit person",
-        logout: "Sign out", photoTitle: "Profile photo", photoDesc: "JPG or PNG, max 5 MB",
-        choosePhoto: "Choose a photo", sectionIdentity: "Identity",
-        firstName: "First name", lastName: "Last name", nickname: "Nickname",
-        sectionDates: "Dates", birthDate: "Date of birth", deathDate: "Date of death",
-        sectionRelations: "Family relations", father: "Father", mother: "Mother", spouse: "Spouse",
-        sectionNotes: "Notes & Biography", save: "Save", delete: "Delete"
+        back:"Back", addPerson:"Add person", editPerson:"Edit person",
+        logout:"Sign out", photoTitle:"Profile photo", photoDesc:"JPG or PNG, max 5 MB",
+        choosePhoto:"Choose photo", sectionIdentity:"Identity",
+        firstName:"First name", lastName:"Last name", nickname:"Nickname",
+        sectionDates:"Dates", birthDate:"Date of birth", deathDate:"Date of death",
+        sectionParents:"Parents", father:"Father", mother:"Mother",
+        sectionSpouses:"Spouse(s)", addSpouse:"Add spouse",
+        spouseLabel:"Spouse", marriageDate:"Marriage date", divorceDate:"End date",
+        endReason:"End reason", endReasonNone:"Still together", endReasonDeath:"Widowed", endReasonDivorce:"Divorce/Separation",
+        sectionNotes:"Notes & Biography", save:"Save", delete:"Delete",
+        selectPerson:"— Select —"
       },
       es: {
-        back: "Volver", addPerson: "Añadir una persona", editPerson: "Modificar una persona",
-        logout: "Cerrar sesión", photoTitle: "Foto de perfil", photoDesc: "JPG o PNG, máx 5 MB",
-        choosePhoto: "Elegir una foto", sectionIdentity: "Identidad",
-        firstName: "Nombre", lastName: "Apellido", nickname: "Apodo / Alias",
-        sectionDates: "Fechas", birthDate: "Fecha de nacimiento", deathDate: "Fecha de fallecimiento",
-        sectionRelations: "Relaciones familiares", father: "Padre", mother: "Madre", spouse: "Cónyuge",
-        sectionNotes: "Notas & Biografía", save: "Guardar", delete: "Eliminar"
+        back:"Volver", addPerson:"Añadir persona", editPerson:"Modificar persona",
+        logout:"Cerrar sesión", photoTitle:"Foto de perfil", photoDesc:"JPG o PNG, máx 5 MB",
+        choosePhoto:"Elegir foto", sectionIdentity:"Identidad",
+        firstName:"Nombre", lastName:"Apellido", nickname:"Apodo",
+        sectionDates:"Fechas", birthDate:"Fecha de nacimiento", deathDate:"Fecha de fallecimiento",
+        sectionParents:"Padres", father:"Padre", mother:"Madre",
+        sectionSpouses:"Cónyuge(s)", addSpouse:"Añadir cónyuge",
+        spouseLabel:"Cónyuge", marriageDate:"Fecha de matrimonio", divorceDate:"Fecha de fin",
+        endReason:"Motivo de fin", endReasonNone:"Siguen juntos", endReasonDeath:"Viudo/a", endReasonDivorce:"Divorcio/Separación",
+        sectionNotes:"Notas & Biografía", save:"Guardar", delete:"Eliminar",
+        selectPerson:"— Seleccionar —"
       }
     };
 
@@ -293,31 +264,32 @@
     function setLang(lang) {
       currentLang = lang;
       localStorage.setItem("lang", lang);
-      document.querySelectorAll(".lang-btn").forEach(btn => {
-        btn.classList.toggle("active", btn.textContent === lang.toUpperCase());
-      });
+      document.querySelectorAll(".lang-btn").forEach(btn =>
+        btn.classList.toggle("active", btn.textContent === lang.toUpperCase())
+      );
       applyTranslations();
     }
 
     function applyTranslations() {
       const t = i18n[currentLang];
       document.querySelectorAll("[data-i18n]").forEach(el => {
-        const key = el.getAttribute("data-i18n");
-        if (t[key]) el.textContent = t[key];
+        const k = el.getAttribute("data-i18n");
+        if (t[k]) el.textContent = t[k];
       });
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get("id")) {
         document.getElementById("pageTitle").textContent = t.editPerson;
         document.getElementById("pageTitleMain").textContent = t.editPerson;
       }
+      // Re-render les lignes conjoint avec les bonnes traductions
+      if (window.refreshSpouseRows) window.refreshSpouseRows();
     }
 
     setLang(currentLang);
 
-    document.getElementById("logoutBtn").addEventListener("click", function() {
-      firebase.auth().signOut().then(function() { window.location.href = "index.html"; });
-    });
+    document.getElementById("logoutBtn").addEventListener("click", () =>
+      firebase.auth().signOut().then(() => window.location.href = "index.html")
+    );
   </script>
-
 </body>
 </html>
