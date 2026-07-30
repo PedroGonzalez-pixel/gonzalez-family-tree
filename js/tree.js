@@ -1,7 +1,10 @@
-// ARBRE GÉNÉALOGIQUE v3.1.0
+// ARBRE GÉNÉALOGIQUE v3.2.0 — CORRIGÉ
+// - Charge tableau spouses[] (tous les conjoints)
+// - Affiche unions multiples (remariages)
+// - Liaisons parent→enfant fixes pour 2+ parents
 // - Pas de photo dans les noeuds, juste un picto si photo disponible
-// - Bouton recentrer exposé via window.treeResetView()
-const TREE_VERSION = "3.1.0";
+
+const TREE_VERSION = "3.2.0";
 
 function v(x){ return x&&typeof x==="string"&&x.trim()?x:null; }
 
@@ -35,10 +38,18 @@ firebase.auth().onAuthStateChanged(async user=>{
   const P={};
   snap.forEach(d=>{
     const x=d.data();
-    P[d.id]={id:d.id, n:(x.firstName||"")+" "+(x.lastName||""),
-      nick:v(x.nickname), bd:v(x.birthDate), dd:v(x.deathDate),
-      fid:v(x.fatherId), mid:v(x.motherId), sid:v(x.spouseId),
-      hasPhoto:!!(v(x.photoURL))};
+    P[d.id]={
+      id:d.id, 
+      n:(x.firstName||"")+" "+(x.lastName||""),
+      nick:v(x.nickname), 
+      bd:v(x.birthDate), 
+      dd:v(x.deathDate),
+      fid:v(x.fatherId), 
+      mid:v(x.motherId), 
+      sid:v(x.spouseId),
+      spouses: x.spouses || [],  // ← FIX #1 : Charger tableau spouses[]
+      hasPhoto:!!(v(x.photoURL))
+    };
   });
   document.getElementById("loadingMsg").style.display="none";
   document.getElementById("tree-container").style.display="block";
@@ -84,11 +95,27 @@ function drawTree(P){
     fams[k].ch.push(id);
   });
 
-  // ── CONJOINTS ─────────────────────────────────────────────
+  // ── CONJOINTS — FIX #2 : Charger TOUS les conjoints actifs ─────────────────
   const spouseOf={};
-  ids.forEach(id=>{ if(P[id].sid&&P[P[id].sid]) spouseOf[id]=P[id].sid; });
+  ids.forEach(id=>{
+    const p = P[id];
+    
+    // Priorité 1 : spouses[] avec conjoint actif (sans endReason)
+    if (p.spouses && p.spouses.length > 0) {
+      const activeSpouse = p.spouses.find(s => !s.endReason);
+      if (activeSpouse && P[activeSpouse.spouseId]) {
+        spouseOf[id] = activeSpouse.spouseId;
+        return;
+      }
+    }
+    
+    // Priorité 2 : spouseId (compatibilité anciens data)
+    if (p.sid && P[p.sid]) {
+      spouseOf[id] = p.sid;
+    }
+  });
 
-  // ── CALCUL LARGEUR SOUS-ARBRES ────────────────────────────
+  // ── CALCUL LARGEUR SOUS-ARBRES ────────────────────────────────
   const subtreeW={};
   function calcWidth(owner){
     if(subtreeW[owner]!==undefined) return subtreeW[owner];
@@ -193,16 +220,54 @@ function drawTree(P){
   _svg.call(_zoom);
   _svg.call(_zoom.transform, d3.zoomIdentity.translate(_W/2,40));
 
-  // ── LIENS CONJOINTS ───────────────────────────────────────
+  // ── LIENS CONJOINTS — FIX #3 : Afficher TOUS les conjoints (y compris anciens) ─
   const spDone=new Set();
   ids.forEach(id=>{
-    const sp=spouseOf[id]; if(!sp) return;
-    const k=[id,sp].sort().join("~"); if(spDone.has(k)) return; spDone.add(k);
-    const pa=pos[id],pb=pos[sp]; if(!pa||!pb) return;
-    const lx=Math.min(pa.x,pb.x)+NW, rx=Math.max(pa.x,pb.x), y=pa.y+NH/2;
-    g.append("line").attr("x1",lx).attr("y1",y).attr("x2",rx).attr("y2",y)
-      .attr("stroke","#aaaacc").attr("stroke-width",1.5)
-      .attr("stroke-dasharray","5,4").attr("fill","none");
+    const p = P[id];
+    const spousesToShow = [];
+    
+    // Collecter tous les conjoints de spouses[]
+    if (p.spouses && p.spouses.length > 0) {
+      p.spouses.forEach(s => {
+        if (s.spouseId && P[s.spouseId]) {
+          spousesToShow.push({ 
+            id: s.spouseId, 
+            active: !s.endReason,  // active = pas de endReason
+            endReason: s.endReason 
+          });
+        }
+      });
+    } else if (p.sid && P[p.sid]) {
+      // Fallback spouseId pour compatibilité anciens data
+      spousesToShow.push({ id: p.sid, active: true, endReason: null });
+    }
+    
+    // Tracer les lignes
+    spousesToShow.forEach(spouse => {
+      const k=[id, spouse.id].sort().join("~");
+      if(spDone.has(k)) return;
+      spDone.add(k);
+      
+      const pa=pos[id], pb=pos[spouse.id];
+      if(!pa||!pb) return;
+      
+      const lx=Math.min(pa.x,pb.x)+NW, rx=Math.max(pa.x,pb.x), y=pa.y+NH/2;
+      
+      // Style selon statut union
+      let strokeColor = "#aaaacc";
+      let strokeDash = "5,4";
+      if (!spouse.active) {
+        strokeColor = "#d0d0d8";      // Gris pâle pour ancien
+        strokeDash = "2,2";            // Pointillé fin
+      }
+      
+      g.append("line")
+        .attr("x1",lx).attr("y1",y).attr("x2",rx).attr("y2",y)
+        .attr("stroke", strokeColor)
+        .attr("stroke-width", spouse.active ? 1.5 : 1)
+        .attr("stroke-dasharray", strokeDash)
+        .attr("fill","none");
+    });
   });
 
   // ── LIENS PARENT → ENFANT ─────────────────────────────────
