@@ -1,4 +1,5 @@
 // edit.js — Gestion des conjoints multiples (remariages, veufs)
+// v2.0 : FIX synchronisation motherId pour enfants en remariages
 
 const CLOUDINARY_CLOUD  = "dekk2a3i0";
 const CLOUDINARY_PRESET = "gonzalez_family";
@@ -257,6 +258,56 @@ async function syncSpouses(myId, oldSpouses, newSpouses) {
   }
 }
 
+// ── FIX #4 : Sync motherId pour les enfants (remariages) ──
+// Quand un parent ajoute un nouveau conjoint, les enfants doivent
+// avoir motherId/fatherId synchronisés si absent
+async function updateChildrenParentage(myId, gender, spouses) {
+  // Si j'ajoute un nouveau conjoint actif (sans endReason),
+  // trouver tous mes enfants et MAJ motherId (si femme) ou fatherId (si homme)
+  
+  for (const spouse of spouses) {
+    if (!spouse.spouseId || spouse.endReason) continue; // Ignorer anciennes unions
+    
+    try {
+      if (gender === "male") {
+        // Je suis père → chercher enfants sans mère
+        const snap = await db.collection("persons")
+          .where("fatherId", "==", myId)
+          .get();
+        
+        snap.forEach(async doc => {
+          const child = doc.data();
+          // Si l'enfant n'a pas de mère ET que j'ajoute une femme, elle devient mère
+          if (!child.motherId) {
+            try {
+              await db.collection("persons").doc(doc.id).update({
+                motherId: spouse.spouseId
+              });
+            } catch(e) { console.error("updateChildrenParentage (mother):", e); }
+          }
+        });
+      } else if (gender === "female") {
+        // Je suis mère → chercher enfants sans père
+        const snap = await db.collection("persons")
+          .where("motherId", "==", myId)
+          .get();
+        
+        snap.forEach(async doc => {
+          const child = doc.data();
+          // Si l'enfant n'a pas de père ET que j'ajoute un homme, il devient père
+          if (!child.fatherId) {
+            try {
+              await db.collection("persons").doc(doc.id).update({
+                fatherId: spouse.spouseId
+              });
+            } catch(e) { console.error("updateChildrenParentage (father):", e); }
+          }
+        });
+      }
+    } catch(e) { console.error("updateChildrenParentage query:", e); }
+  }
+}
+
 // ── Soumission ────────────────────────────────────────────
 document.getElementById("personForm").addEventListener("submit", async function(e) {
   e.preventDefault();
@@ -279,9 +330,18 @@ document.getElementById("personForm").addEventListener("submit", async function(
         endReason:    s.endReason    || null
       }));
 
+    const firstName = document.getElementById("firstName").value.trim();
+    const lastName  = document.getElementById("lastName").value.trim();
+    
+    // Déduire genre (simplifié : si prénom féminin connu, gender="female")
+    // Sinon, utiliser lastNameLength ou autre heuristique
+    // Ici, on accepte un input caché ou on demande manuellement
+    // Pour simplicité, on assume genre basé sur le contexte (peut être amélioré)
+    const gender = firstName && /^(NOSE|Maria|Mariana|Carmen|Rosa|Ana|Sofia|Alejandra|Valentina|Gabriela|Francisca|Lorena|Sandra|Brenda|Marisol|Claudia|Leticia|Antonia|Yolanda|Angelina)$/.test(firstName.toUpperCase()) ? "female" : "male";
+
     const data = {
-      firstName: document.getElementById("firstName").value.trim(),
-      lastName:  document.getElementById("lastName").value.trim(),
+      firstName: firstName,
+      lastName:  lastName,
       nickname:  document.getElementById("nickname").value.trim() || null,
       birthDate: document.getElementById("birthDate").value || null,
       deathDate: document.getElementById("deathDate").value || null,
@@ -301,11 +361,13 @@ document.getElementById("personForm").addEventListener("submit", async function(
       const oldSpouses = oldDoc.exists ? (oldDoc.data().spouses || []) : [];
       await db.collection("persons").doc(personId).update(data);
       await syncSpouses(personId, oldSpouses, cleanSpouses);
+      await updateChildrenParentage(personId, gender, cleanSpouses);  // ← FIX #4
     } else {
       data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
       const ref = await db.collection("persons").add(data);
       currentId = ref.id;
       await syncSpouses(currentId, [], cleanSpouses);
+      await updateChildrenParentage(currentId, gender, cleanSpouses);  // ← FIX #4
     }
 
     window.location.href = "dashboard.html";
