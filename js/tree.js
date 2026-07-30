@@ -1,8 +1,9 @@
-// ARBRE GÉNÉALOGIQUE v3.6.0 — LIGNES SANS CONJOINTS
-// - Trace les lignes parent→enfant SEULEMENT vers les vrais enfants
-// - Exclut les conjoints des enfants des lignes de connexion
+// ARBRE GÉNÉALOGIQUE v3.4.0 — FIX LIENS FAUX CONJOINTS
+// - Demi-niveaux OK
+// - Mère seule OK  
+// - FIX : Ne pas afficher liens vers conjoints de enfants (Felipe faux lien)
 
-const TREE_VERSION = "3.6.0";
+const TREE_VERSION = "3.4.0";
 
 function v(x){ return x&&typeof x==="string"&&x.trim()?x:null; }
 
@@ -57,6 +58,7 @@ firebase.auth().onAuthStateChanged(async user=>{
 function drawTree(P){
   const ids=Object.keys(P);
 
+  // ── GÉNÉRATIONS ───────────────────────────────────────────
   const gen={};
   ids.forEach(id=>{ if(!P[id].fid&&!P[id].mid) gen[id]=0; });
   let changed=true;
@@ -81,6 +83,7 @@ function drawTree(P){
   }
   ids.forEach(id=>{ if(gen[id]===undefined) gen[id]=0; });
 
+  // ── FAMILLES (FIX v3.3 : Support mère seule) ──────────────
   const fams={};
   ids.forEach(id=>{
     const fid=P[id].fid&&P[P[id].fid]?P[id].fid:null;
@@ -91,6 +94,7 @@ function drawTree(P){
     fams[k].ch.push(id);
   });
 
+  // ── CONJOINTS ────────────────────────────────────────────
   const spouseOf={};
   ids.forEach(id=>{
     const p = P[id];
@@ -110,12 +114,7 @@ function drawTree(P){
     }
   });
 
-  // FIX v3.6 : Identifier qui est conjoint de qui
-  const isSpouseOf = {};
-  Object.entries(spouseOf).forEach(([id, spouseId]) => {
-    isSpouseOf[spouseId] = id;
-  });
-
+  // ── CALCUL LARGEUR SOUS-ARBRES ────────────────────────────
   const subtreeW={};
   function calcWidth(owner){
     if(subtreeW[owner]!==undefined) return subtreeW[owner];
@@ -124,9 +123,11 @@ function drawTree(P){
     ids.forEach(cid=>{
       const cfid=P[cid].fid, cmid=P[cid].mid;
       if(partner){
+        // FIX v3.4 : Strictement (père ET mère tous deux)
         if(cfid===owner && cmid===partner) children.push(cid);
         else if(cfid===partner && cmid===owner) children.push(cid);
       } else {
+        // Parent unique
         if((cfid===owner&&!cmid)||(cmid===owner&&!cfid)) children.push(cid);
       }
     });
@@ -145,6 +146,7 @@ function drawTree(P){
   }
   ids.forEach(id=>{ const sp=spouseOf[id]; const owner=sp&&id>sp?sp:id; calcWidth(owner); });
 
+  // ── PLACEMENT ─────────────────────────────────────────────
   const pos={};
   const placed=new Set();
 
@@ -165,6 +167,7 @@ function drawTree(P){
       if(placed.has(cid)) return;
       const cfid=P[cid].fid, cmid=P[cid].mid;
       if(partner){
+        // FIX v3.4 : Strictement parent1 ET parent2
         if(cfid===owner && cmid===partner) children.push(cid);
         else if(cfid===partner && cmid===owner) children.push(cid);
       } else {
@@ -206,6 +209,7 @@ function drawTree(P){
   rootOwners.forEach(ro=>{ const w=calcWidth(ro); placeSubtree(ro,rootX+w/2,0); rootX+=w+HGAP; });
   ids.forEach(id=>{ if(!placed.has(id)){pos[id]={x:0,y:gen[id]*(NH+VGAP)};placed.add(id);} });
 
+  // ── SVG ───────────────────────────────────────────────────
   const wrapper=document.getElementById("tree-container");
   _W=wrapper.clientWidth||window.innerWidth;
   _H=wrapper.clientHeight||window.innerHeight-56;
@@ -225,6 +229,7 @@ function drawTree(P){
   _svg.call(_zoom);
   _svg.call(_zoom.transform, d3.zoomIdentity.translate(_W/2,40));
 
+  // ── LIENS CONJOINTS ───────────────────────────────────────
   const spDone=new Set();
   ids.forEach(id=>{
     const p = P[id];
@@ -270,28 +275,20 @@ function drawTree(P){
     });
   });
 
-  // ── LIENS PARENT → ENFANT — FIX v3.6 : EXCLURE CONJOINTS ───────────
+  // ── LIENS PARENT → ENFANT ─────────────────────────────────
   Object.values(fams).forEach(({fid,mid,ch})=>{
     const pf=fid?pos[fid]:null, pm=mid?pos[mid]:null;
     if(!pf&&!pm) return;
     const fCx=pf?pf.x+NW/2:null, mCx=pm?pm.x+NW/2:null;
     const jX=fCx!==null&&mCx!==null?(fCx+mCx)/2:(fCx||mCx);
     const pY=(pf||pm).y+NH, jY=pY+VGAP*0.35;
-    
     if(fCx!==null)
       g.append("path").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
         .attr("d",`M${fCx},${pY} V${jY} H${jX}`);
     if(mCx!==null&&mCx!==fCx)
       g.append("path").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
         .attr("d",`M${mCx},${pY} V${jY} H${jX}`);
-    
-    // FIX v3.6 : Garder SEULEMENT les enfants directs (pas les conjoints)
-    const childrenOnly = ch.filter(cid => {
-      // Exclure si cet enfant est le conjoint d'un autre enfant
-      return !isSpouseOf[cid];
-    });
-    
-    const cps=childrenOnly.map(cid=>pos[cid]).filter(Boolean);
+    const cps=ch.map(cid=>pos[cid]).filter(Boolean);
     if(!cps.length) return;
     const cxs=cps.map(cp=>cp.x+NW/2);
     const mnX=Math.min(...cxs), mxX=Math.max(...cxs);
@@ -310,6 +307,7 @@ function drawTree(P){
     });
   });
 
+  // ── NŒUDS ─────────────────────────────────────────────────
   ids.forEach(id=>{
     const p=P[id], pt=pos[id]; if(!pt) return;
 
