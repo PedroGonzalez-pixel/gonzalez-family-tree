@@ -1,9 +1,9 @@
-// ARBRE GÉNÉALOGIQUE v3.2.1 — FIX AFFICHAGE REMARIAGES
-// - Recherche conjoint actif AMÉLIORÉE (prend le dernier si plusieurs)
-// - Affiche tous les conjoints correctement
-// - Liaisons parent→enfant fixes
+// ARBRE GÉNÉALOGIQUE v3.3.0 — DEMI-NIVEAUX + MÈRE SEULE
+// - Demi-niveaux pour éviter chevauchement PALMA/Zacharias
+// - Support mère seule (Felipe sans père)
+// - Meilleure séparation verticale des familles
 
-const TREE_VERSION = "3.2.1";
+const TREE_VERSION = "3.3.0";
 
 function v(x){ return x&&typeof x==="string"&&x.trim()?x:null; }
 
@@ -19,6 +19,7 @@ function getInfo(p){
 }
 
 const NW=140, NH=72, HGAP=20, CGAP=8, VGAP=100;
+const HALF_VGAP = VGAP / 2;  // Demi-niveau pour enfants
 
 // Référence globale pour le zoom (recentrer)
 let _svg=null, _zoom=null, _W=0, _H=0;
@@ -83,13 +84,13 @@ function drawTree(P){
   }
   ids.forEach(id=>{ if(gen[id]===undefined) gen[id]=0; });
 
-  // ── FAMILLES ──────────────────────────────────────────────
+  // ── FAMILLES (FIX v3.3 : Support mère seule) ──────────────
   const fams={};
   ids.forEach(id=>{
     const fid=P[id].fid&&P[P[id].fid]?P[id].fid:null;
     const mid=P[id].mid&&P[P[id].mid]?P[id].mid:null;
-    if(!fid&&!mid) return;
-    const k=(fid||"X")+"##"+(mid||"X");
+    if(!fid&&!mid) return;  // Seulement si au moins 1 parent
+    const k=(fid||"X")+"##"+(mid||"X");  // "X##mid" = mère seule, "fid##X" = père seul
     if(!fams[k]) fams[k]={fid,mid,ch:[]};
     fams[k].ch.push(id);
   });
@@ -100,21 +101,15 @@ function drawTree(P){
     const p = P[id];
     
     if (p.spouses && p.spouses.length > 0) {
-      // Stratégie 1 : Chercher un conjoint sans endReason (marqué actif)
       let activeSpouse = p.spouses.find(s => !s.endReason);
-      
-      // Stratégie 2 : Si aucun marqué "actif", prendre le DERNIER
-      // (plus probable d'être le conjoint actuel)
       if (!activeSpouse) {
         activeSpouse = p.spouses[p.spouses.length - 1];
       }
-      
       if (activeSpouse && P[activeSpouse.spouseId]) {
         spouseOf[id] = activeSpouse.spouseId;
       }
     }
     
-    // Fallback : spouseId (compatibilité anciens data)
     if (!spouseOf[id] && p.sid && P[p.sid]) {
       spouseOf[id] = p.sid;
     }
@@ -186,11 +181,19 @@ function drawTree(P){
     let totalW=0;
     childOwners.forEach((co,i)=>{ totalW+=calcWidth(co)+(i>0?HGAP:0); });
     let startX=cx-totalW/2;
-    childOwners.forEach(co=>{
+    
+    // ✅ FIX v3.3 : Demi-niveaux pour enfants (évite chevauchement)
+    let currentY = y+NH;
+    childOwners.forEach((co, idx)=>{
       const w=calcWidth(co);
-      placeSubtree(co,startX+w/2,y+NH+VGAP);
+      // Alterner entre VGAP complet et demi-VGAP
+      const yOffset = (idx % 2 === 0) ? VGAP : HALF_VGAP;
+      placeSubtree(co, startX+w/2, currentY+yOffset);
       startX+=w+HGAP;
+      // Accumuler Y avec demi-niveaux
+      if(idx % 2 === 1) currentY += HALF_VGAP;
     });
+    
     const childCxs=children.map(cid=>pos[cid]).filter(Boolean).map(p=>p.x+NW/2);
     const childCenter=childCxs.length>0?(Math.min(...childCxs)+Math.max(...childCxs))/2:cx;
     placeCouple(owner,childCenter,y);
@@ -231,7 +234,6 @@ function drawTree(P){
     const p = P[id];
     const spousesToShow = [];
     
-    // Collecter tous les conjoints de spouses[]
     if (p.spouses && p.spouses.length > 0) {
       p.spouses.forEach(s => {
         if (s.spouseId && P[s.spouseId]) {
@@ -246,7 +248,6 @@ function drawTree(P){
       spousesToShow.push({ id: p.sid, active: true, endReason: null });
     }
     
-    // Tracer les lignes
     spousesToShow.forEach(spouse => {
       const k=[id, spouse.id].sort().join("~");
       if(spDone.has(k)) return;
@@ -257,7 +258,6 @@ function drawTree(P){
       
       const lx=Math.min(pa.x,pb.x)+NW, rx=Math.max(pa.x,pb.x), y=pa.y+NH/2;
       
-      // Style selon statut union
       let strokeColor = "#aaaacc";
       let strokeDash = "5,4";
       if (!spouse.active) {
@@ -315,14 +315,12 @@ function drawTree(P){
       .on("mouseenter",function(){ grp.select("rect").attr("stroke","#0071e3").attr("stroke-width",2); })
       .on("mouseleave",function(){ grp.select("rect").attr("stroke",p.dd?"#c8c8cc":"#d1d1d6").attr("stroke-width",1.5); });
 
-    // Rectangle
     grp.append("rect")
       .attr("x",pt.x).attr("y",pt.y).attr("width",NW).attr("height",NH).attr("rx",10)
       .attr("fill",p.dd?"#f2f2f4":"white").attr("stroke",p.dd?"#c8c8cc":"#d1d1d6").attr("stroke-width",1.5);
 
     const cx=pt.x+NW/2;
 
-    // Picto photo
     if(p.hasPhoto){
       grp.append("rect")
         .attr("x",pt.x+NW-20).attr("y",pt.y+4)
@@ -334,7 +332,6 @@ function drawTree(P){
         .text("📷");
     }
 
-    // Nom
     const words=p.n.trim().split(" ");
     const half=Math.ceil(words.length/2);
     const two=p.n.length>16&&words.length>1;
@@ -349,7 +346,6 @@ function drawTree(P){
 
     let iy=ty+lines.length*14+2;
 
-    // Surnom
     if(p.nick){
       grp.append("text").attr("x",cx).attr("y",iy)
         .attr("text-anchor","middle").attr("font-family","'DM Sans',sans-serif")
@@ -358,7 +354,6 @@ function drawTree(P){
       iy+=12;
     }
 
-    // Âge / années
     const inf=getInfo(p);
     if(inf){
       grp.append("text").attr("x",cx).attr("y",iy)
