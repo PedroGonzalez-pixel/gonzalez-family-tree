@@ -1,9 +1,7 @@
-// ARBRE GÉNÉALOGIQUE v3.4.0 — FIX LIENS FAUX CONJOINTS
-// - Demi-niveaux OK
-// - Mère seule OK  
-// - FIX : Ne pas afficher liens vers conjoints de enfants (Felipe faux lien)
+// ARBRE GÉNÉALOGIQUE v3.5.0 — DÉCALER CONJOINTS NON-ENFANTS
+// - Décale les conjoints vers le bas si non-enfants du même couple
 
-const TREE_VERSION = "3.4.0";
+const TREE_VERSION = "3.5.0";
 
 function v(x){ return x&&typeof x==="string"&&x.trim()?x:null; }
 
@@ -111,6 +109,18 @@ function drawTree(P){
     }
   });
 
+  // FIX v3.5 : Tracer qui est enfant ensemble
+  const childrenOf = {};
+  ids.forEach(id => {
+    const fid = P[id].fid;
+    const mid = P[id].mid;
+    if (fid && mid) {
+      const k = (fid < mid ? fid + "##" + mid : mid + "##" + fid);
+      if (!childrenOf[k]) childrenOf[k] = [];
+      childrenOf[k].push(id);
+    }
+  });
+
   const subtreeW={};
   function calcWidth(owner){
     if(subtreeW[owner]!==undefined) return subtreeW[owner];
@@ -142,13 +152,34 @@ function drawTree(P){
 
   const pos={};
   const placed=new Set();
+  const isActualChild={}; // FIX v3.5
 
-  function placeCouple(owner,cx,y){
+  function placeCouple(owner,cx,y, isChild=true){  // FIX v3.5
     const partner=spouseOf[owner];
     if(partner&&P[partner]){
-      pos[owner]={x:cx-NW-CGAP/2,y}; pos[partner]={x:cx+CGAP/2,y};
+      // FIX v3.5 : Si conjoint n'est pas enfant du même couple, le décaler
+      const partner_is_child = isActualChild[partner];
+      const owner_is_child = isChild;
+      
+      if (owner_is_child && !partner_is_child) {
+        // Owner est enfant, Partner ne l'est pas → décaler partner vers le bas
+        pos[owner]={x:cx-NW-CGAP/2,y};
+        pos[partner]={x:cx+CGAP/2,y:y+HALF_VGAP};
+      } else if (!owner_is_child && partner_is_child) {
+        // Partner est enfant, Owner ne l'est pas → décaler owner vers le bas
+        pos[partner]={x:cx+CGAP/2,y};
+        pos[owner]={x:cx-NW-CGAP/2,y:y+HALF_VGAP};
+      } else {
+        // Tous les deux enfants ou aucun → même Y
+        pos[owner]={x:cx-NW-CGAP/2,y};
+        pos[partner]={x:cx+CGAP/2,y};
+      }
       placed.add(owner); placed.add(partner);
-    } else { pos[owner]={x:cx-NW/2,y}; placed.add(owner); }
+    } else { 
+      pos[owner]={x:cx-NW/2,y};
+      isActualChild[owner]=isChild;  // FIX v3.5
+      placed.add(owner); 
+    }
   }
 
   function placeSubtree(owner,cx,y){
@@ -189,7 +220,10 @@ function drawTree(P){
     
     const childCxs=children.map(cid=>pos[cid]).filter(Boolean).map(p=>p.x+NW/2);
     const childCenter=childCxs.length>0?(Math.min(...childCxs)+Math.max(...childCxs))/2:cx;
-    placeCouple(owner,childCenter,y);
+    
+    // FIX v3.5 : Marquer owner comme enfant si dans children
+    isActualChild[owner] = true;
+    placeCouple(owner,childCenter,y, true);
   }
 
   const roots=ids.filter(id=>gen[id]===0&&!P[id].fid&&!P[id].mid);
