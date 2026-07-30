@@ -1,7 +1,8 @@
-// ARBRE GÉNÉALOGIQUE v3.5.0 — DÉCALER CONJOINTS NON-ENFANTS
-// - Décale les conjoints vers le bas si non-enfants du même couple
+// ARBRE GÉNÉALOGIQUE v3.6.0 — LIGNES SANS CONJOINTS
+// - Trace les lignes parent→enfant SEULEMENT vers les vrais enfants
+// - Exclut les conjoints des enfants des lignes de connexion
 
-const TREE_VERSION = "3.5.0";
+const TREE_VERSION = "3.6.0";
 
 function v(x){ return x&&typeof x==="string"&&x.trim()?x:null; }
 
@@ -109,16 +110,10 @@ function drawTree(P){
     }
   });
 
-  // FIX v3.5 : Tracer qui est enfant ensemble
-  const childrenOf = {};
-  ids.forEach(id => {
-    const fid = P[id].fid;
-    const mid = P[id].mid;
-    if (fid && mid) {
-      const k = (fid < mid ? fid + "##" + mid : mid + "##" + fid);
-      if (!childrenOf[k]) childrenOf[k] = [];
-      childrenOf[k].push(id);
-    }
+  // FIX v3.6 : Identifier qui est conjoint de qui
+  const isSpouseOf = {};
+  Object.entries(spouseOf).forEach(([id, spouseId]) => {
+    isSpouseOf[spouseId] = id;
   });
 
   const subtreeW={};
@@ -152,34 +147,13 @@ function drawTree(P){
 
   const pos={};
   const placed=new Set();
-  const isActualChild={}; // FIX v3.5
 
-  function placeCouple(owner,cx,y, isChild=true){  // FIX v3.5
+  function placeCouple(owner,cx,y){
     const partner=spouseOf[owner];
     if(partner&&P[partner]){
-      // FIX v3.5 : Si conjoint n'est pas enfant du même couple, le décaler
-      const partner_is_child = isActualChild[partner];
-      const owner_is_child = isChild;
-      
-      if (owner_is_child && !partner_is_child) {
-        // Owner est enfant, Partner ne l'est pas → décaler partner vers le bas
-        pos[owner]={x:cx-NW-CGAP/2,y};
-        pos[partner]={x:cx+CGAP/2,y:y+HALF_VGAP};
-      } else if (!owner_is_child && partner_is_child) {
-        // Partner est enfant, Owner ne l'est pas → décaler owner vers le bas
-        pos[partner]={x:cx+CGAP/2,y};
-        pos[owner]={x:cx-NW-CGAP/2,y:y+HALF_VGAP};
-      } else {
-        // Tous les deux enfants ou aucun → même Y
-        pos[owner]={x:cx-NW-CGAP/2,y};
-        pos[partner]={x:cx+CGAP/2,y};
-      }
+      pos[owner]={x:cx-NW-CGAP/2,y}; pos[partner]={x:cx+CGAP/2,y};
       placed.add(owner); placed.add(partner);
-    } else { 
-      pos[owner]={x:cx-NW/2,y};
-      isActualChild[owner]=isChild;  // FIX v3.5
-      placed.add(owner); 
-    }
+    } else { pos[owner]={x:cx-NW/2,y}; placed.add(owner); }
   }
 
   function placeSubtree(owner,cx,y){
@@ -220,10 +194,7 @@ function drawTree(P){
     
     const childCxs=children.map(cid=>pos[cid]).filter(Boolean).map(p=>p.x+NW/2);
     const childCenter=childCxs.length>0?(Math.min(...childCxs)+Math.max(...childCxs))/2:cx;
-    
-    // FIX v3.5 : Marquer owner comme enfant si dans children
-    isActualChild[owner] = true;
-    placeCouple(owner,childCenter,y, true);
+    placeCouple(owner,childCenter,y);
   }
 
   const roots=ids.filter(id=>gen[id]===0&&!P[id].fid&&!P[id].mid);
@@ -299,19 +270,28 @@ function drawTree(P){
     });
   });
 
+  // ── LIENS PARENT → ENFANT — FIX v3.6 : EXCLURE CONJOINTS ───────────
   Object.values(fams).forEach(({fid,mid,ch})=>{
     const pf=fid?pos[fid]:null, pm=mid?pos[mid]:null;
     if(!pf&&!pm) return;
     const fCx=pf?pf.x+NW/2:null, mCx=pm?pm.x+NW/2:null;
     const jX=fCx!==null&&mCx!==null?(fCx+mCx)/2:(fCx||mCx);
     const pY=(pf||pm).y+NH, jY=pY+VGAP*0.35;
+    
     if(fCx!==null)
       g.append("path").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
         .attr("d",`M${fCx},${pY} V${jY} H${jX}`);
     if(mCx!==null&&mCx!==fCx)
       g.append("path").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
         .attr("d",`M${mCx},${pY} V${jY} H${jX}`);
-    const cps=ch.map(cid=>pos[cid]).filter(Boolean);
+    
+    // FIX v3.6 : Garder SEULEMENT les enfants directs (pas les conjoints)
+    const childrenOnly = ch.filter(cid => {
+      // Exclure si cet enfant est le conjoint d'un autre enfant
+      return !isSpouseOf[cid];
+    });
+    
+    const cps=childrenOnly.map(cid=>pos[cid]).filter(Boolean);
     if(!cps.length) return;
     const cxs=cps.map(cp=>cp.x+NW/2);
     const mnX=Math.min(...cxs), mxX=Math.max(...cxs);
