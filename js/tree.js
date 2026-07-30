@@ -1,10 +1,9 @@
-// ARBRE GÉNÉALOGIQUE v3.2.0 — CORRIGÉ
-// - Charge tableau spouses[] (tous les conjoints)
-// - Affiche unions multiples (remariages)
-// - Liaisons parent→enfant fixes pour 2+ parents
-// - Pas de photo dans les noeuds, juste un picto si photo disponible
+// ARBRE GÉNÉALOGIQUE v3.2.1 — FIX AFFICHAGE REMARIAGES
+// - Recherche conjoint actif AMÉLIORÉE (prend le dernier si plusieurs)
+// - Affiche tous les conjoints correctement
+// - Liaisons parent→enfant fixes
 
-const TREE_VERSION = "3.2.0";
+const TREE_VERSION = "3.2.1";
 
 function v(x){ return x&&typeof x==="string"&&x.trim()?x:null; }
 
@@ -47,7 +46,7 @@ firebase.auth().onAuthStateChanged(async user=>{
       fid:v(x.fatherId), 
       mid:v(x.motherId), 
       sid:v(x.spouseId),
-      spouses: x.spouses || [],  // ← FIX #1 : Charger tableau spouses[]
+      spouses: x.spouses || [],
       hasPhoto:!!(v(x.photoURL))
     };
   });
@@ -95,22 +94,28 @@ function drawTree(P){
     fams[k].ch.push(id);
   });
 
-  // ── CONJOINTS — FIX #2 : Charger TOUS les conjoints actifs ─────────────────
+  // ── CONJOINTS — FIX v3.2.1 : Chercher DERNIER conjoint actif ────────
   const spouseOf={};
   ids.forEach(id=>{
     const p = P[id];
     
-    // Priorité 1 : spouses[] avec conjoint actif (sans endReason)
     if (p.spouses && p.spouses.length > 0) {
-      const activeSpouse = p.spouses.find(s => !s.endReason);
+      // Stratégie 1 : Chercher un conjoint sans endReason (marqué actif)
+      let activeSpouse = p.spouses.find(s => !s.endReason);
+      
+      // Stratégie 2 : Si aucun marqué "actif", prendre le DERNIER
+      // (plus probable d'être le conjoint actuel)
+      if (!activeSpouse) {
+        activeSpouse = p.spouses[p.spouses.length - 1];
+      }
+      
       if (activeSpouse && P[activeSpouse.spouseId]) {
         spouseOf[id] = activeSpouse.spouseId;
-        return;
       }
     }
     
-    // Priorité 2 : spouseId (compatibilité anciens data)
-    if (p.sid && P[p.sid]) {
+    // Fallback : spouseId (compatibilité anciens data)
+    if (!spouseOf[id] && p.sid && P[p.sid]) {
       spouseOf[id] = p.sid;
     }
   });
@@ -220,7 +225,7 @@ function drawTree(P){
   _svg.call(_zoom);
   _svg.call(_zoom.transform, d3.zoomIdentity.translate(_W/2,40));
 
-  // ── LIENS CONJOINTS — FIX #3 : Afficher TOUS les conjoints (y compris anciens) ─
+  // ── LIENS CONJOINTS ───────────────────────────────────────
   const spDone=new Set();
   ids.forEach(id=>{
     const p = P[id];
@@ -232,13 +237,12 @@ function drawTree(P){
         if (s.spouseId && P[s.spouseId]) {
           spousesToShow.push({ 
             id: s.spouseId, 
-            active: !s.endReason,  // active = pas de endReason
+            active: !s.endReason,
             endReason: s.endReason 
           });
         }
       });
     } else if (p.sid && P[p.sid]) {
-      // Fallback spouseId pour compatibilité anciens data
       spousesToShow.push({ id: p.sid, active: true, endReason: null });
     }
     
@@ -257,8 +261,8 @@ function drawTree(P){
       let strokeColor = "#aaaacc";
       let strokeDash = "5,4";
       if (!spouse.active) {
-        strokeColor = "#d0d0d8";      // Gris pâle pour ancien
-        strokeDash = "2,2";            // Pointillé fin
+        strokeColor = "#d0d0d8";
+        strokeDash = "2,2";
       }
       
       g.append("line")
@@ -318,21 +322,19 @@ function drawTree(P){
 
     const cx=pt.x+NW/2;
 
-    // Picto photo (petit appareil photo en haut à droite si photo dispo)
+    // Picto photo
     if(p.hasPhoto){
-      // Fond du badge
       grp.append("rect")
         .attr("x",pt.x+NW-20).attr("y",pt.y+4)
         .attr("width",16).attr("height",12).attr("rx",3)
         .attr("fill","#e8f5e9").attr("stroke","#a5d6a7").attr("stroke-width",0.8);
-      // Icône caméra SVG simplifié
       grp.append("text")
         .attr("x",pt.x+NW-12).attr("y",pt.y+13)
         .attr("text-anchor","middle").attr("font-size",8)
         .text("📷");
     }
 
-    // Nom (1 ou 2 lignes)
+    // Nom
     const words=p.n.trim().split(" ");
     const half=Math.ceil(words.length/2);
     const two=p.n.length>16&&words.length>1;
