@@ -1,9 +1,9 @@
-// ARBRE GÉNÉALOGIQUE v3.3.0 — DEMI-NIVEAUX + MÈRE SEULE
-// - Demi-niveaux pour éviter chevauchement PALMA/Zacharias
-// - Support mère seule (Felipe sans père)
-// - Meilleure séparation verticale des familles
+// ARBRE GÉNÉALOGIQUE v3.4.0 — FIX LIENS FAUX CONJOINTS
+// - Demi-niveaux OK
+// - Mère seule OK  
+// - FIX : Ne pas afficher liens vers conjoints de enfants (Felipe faux lien)
 
-const TREE_VERSION = "3.3.0";
+const TREE_VERSION = "3.4.0";
 
 function v(x){ return x&&typeof x==="string"&&x.trim()?x:null; }
 
@@ -19,9 +19,8 @@ function getInfo(p){
 }
 
 const NW=140, NH=72, HGAP=20, CGAP=8, VGAP=100;
-const HALF_VGAP = VGAP / 2;  // Demi-niveau pour enfants
+const HALF_VGAP = VGAP / 2;
 
-// Référence globale pour le zoom (recentrer)
 let _svg=null, _zoom=null, _W=0, _H=0;
 
 window.treeResetView = function() {
@@ -59,7 +58,6 @@ firebase.auth().onAuthStateChanged(async user=>{
 function drawTree(P){
   const ids=Object.keys(P);
 
-  // ── GÉNÉRATIONS ───────────────────────────────────────────
   const gen={};
   ids.forEach(id=>{ if(!P[id].fid&&!P[id].mid) gen[id]=0; });
   let changed=true;
@@ -84,18 +82,16 @@ function drawTree(P){
   }
   ids.forEach(id=>{ if(gen[id]===undefined) gen[id]=0; });
 
-  // ── FAMILLES (FIX v3.3 : Support mère seule) ──────────────
   const fams={};
   ids.forEach(id=>{
     const fid=P[id].fid&&P[P[id].fid]?P[id].fid:null;
     const mid=P[id].mid&&P[P[id].mid]?P[id].mid:null;
-    if(!fid&&!mid) return;  // Seulement si au moins 1 parent
-    const k=(fid||"X")+"##"+(mid||"X");  // "X##mid" = mère seule, "fid##X" = père seul
+    if(!fid&&!mid) return;
+    const k=(fid||"X")+"##"+(mid||"X");
     if(!fams[k]) fams[k]={fid,mid,ch:[]};
     fams[k].ch.push(id);
   });
 
-  // ── CONJOINTS — FIX v3.2.1 : Chercher DERNIER conjoint actif ────────
   const spouseOf={};
   ids.forEach(id=>{
     const p = P[id];
@@ -115,7 +111,6 @@ function drawTree(P){
     }
   });
 
-  // ── CALCUL LARGEUR SOUS-ARBRES ────────────────────────────────
   const subtreeW={};
   function calcWidth(owner){
     if(subtreeW[owner]!==undefined) return subtreeW[owner];
@@ -124,7 +119,8 @@ function drawTree(P){
     ids.forEach(cid=>{
       const cfid=P[cid].fid, cmid=P[cid].mid;
       if(partner){
-        if((cfid===owner||cmid===owner)&&(cfid===partner||cmid===partner)) children.push(cid);
+        if(cfid===owner && cmid===partner) children.push(cid);
+        else if(cfid===partner && cmid===owner) children.push(cid);
       } else {
         if((cfid===owner&&!cmid)||(cmid===owner&&!cfid)) children.push(cid);
       }
@@ -144,7 +140,6 @@ function drawTree(P){
   }
   ids.forEach(id=>{ const sp=spouseOf[id]; const owner=sp&&id>sp?sp:id; calcWidth(owner); });
 
-  // ── PLACEMENT ─────────────────────────────────────────────
   const pos={};
   const placed=new Set();
 
@@ -165,7 +160,8 @@ function drawTree(P){
       if(placed.has(cid)) return;
       const cfid=P[cid].fid, cmid=P[cid].mid;
       if(partner){
-        if((cfid===owner||cmid===owner)&&(cfid===partner||cmid===partner)) children.push(cid);
+        if(cfid===owner && cmid===partner) children.push(cid);
+        else if(cfid===partner && cmid===owner) children.push(cid);
       } else {
         if((cfid===owner&&!cmid)||(cmid===owner&&!cfid)) children.push(cid);
       }
@@ -182,15 +178,12 @@ function drawTree(P){
     childOwners.forEach((co,i)=>{ totalW+=calcWidth(co)+(i>0?HGAP:0); });
     let startX=cx-totalW/2;
     
-    // ✅ FIX v3.3 : Demi-niveaux pour enfants (évite chevauchement)
     let currentY = y+NH;
     childOwners.forEach((co, idx)=>{
       const w=calcWidth(co);
-      // Alterner entre VGAP complet et demi-VGAP
       const yOffset = (idx % 2 === 0) ? VGAP : HALF_VGAP;
       placeSubtree(co, startX+w/2, currentY+yOffset);
       startX+=w+HGAP;
-      // Accumuler Y avec demi-niveaux
       if(idx % 2 === 1) currentY += HALF_VGAP;
     });
     
@@ -208,7 +201,6 @@ function drawTree(P){
   rootOwners.forEach(ro=>{ const w=calcWidth(ro); placeSubtree(ro,rootX+w/2,0); rootX+=w+HGAP; });
   ids.forEach(id=>{ if(!placed.has(id)){pos[id]={x:0,y:gen[id]*(NH+VGAP)};placed.add(id);} });
 
-  // ── SVG ───────────────────────────────────────────────────
   const wrapper=document.getElementById("tree-container");
   _W=wrapper.clientWidth||window.innerWidth;
   _H=wrapper.clientHeight||window.innerHeight-56;
@@ -228,7 +220,6 @@ function drawTree(P){
   _svg.call(_zoom);
   _svg.call(_zoom.transform, d3.zoomIdentity.translate(_W/2,40));
 
-  // ── LIENS CONJOINTS ───────────────────────────────────────
   const spDone=new Set();
   ids.forEach(id=>{
     const p = P[id];
@@ -274,7 +265,6 @@ function drawTree(P){
     });
   });
 
-  // ── LIENS PARENT → ENFANT ─────────────────────────────────
   Object.values(fams).forEach(({fid,mid,ch})=>{
     const pf=fid?pos[fid]:null, pm=mid?pos[mid]:null;
     if(!pf&&!pm) return;
@@ -306,7 +296,6 @@ function drawTree(P){
     });
   });
 
-  // ── NŒUDS ─────────────────────────────────────────────────
   ids.forEach(id=>{
     const p=P[id], pt=pos[id]; if(!pt) return;
 
