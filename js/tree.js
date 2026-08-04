@@ -1,9 +1,9 @@
-// ARBRE GÉNÉALOGIQUE v4.0.0 — INTERACTIVE DRAG & DROP
-// - Déplacer les personnes à la souris
-// - Sauvegarder/charger positions en JSON
-// - localStorage pour persistance
+// ARBRE GÉNÉALOGIQUE v4.1.0 — FIX DRAG, I18N, LAYOUT
+// - Drag & drop réparé
+// - Boutons en français + réactif aux changements de langue
+// - Boutons en bas à gauche (pas de superposition)
 
-const TREE_VERSION = "4.0.0";
+const TREE_VERSION = "4.1.0";
 
 function v(x){ return x&&typeof x==="string"&&x.trim()?x:null; }
 
@@ -22,12 +22,13 @@ const NW=140, NH=72, HGAP=20, CGAP=8, VGAP=100;
 const HALF_VGAP = VGAP / 2;
 
 let _svg=null, _zoom=null, _W=0, _H=0;
-let _g=null; // Groupe SVG global pour redessiner
+let _g=null;
+let _svgContainer=null;
+let _P={}; // Personnes data globales
+let _pos={}; // Positions modifiables
 
-// Drag & drop globals
-let draggedId = null;
-let dragOffset = { x: 0, y: 0 };
-let pos = {}; // Positions modifiables
+let draggedId=null;
+let dragStartX=0, dragStartY=0;
 
 window.treeResetView = function() {
   if (_svg && _zoom) {
@@ -36,58 +37,54 @@ window.treeResetView = function() {
   }
 };
 
-// Sauvegarde positions
-function savePositions() {
-  const positions = {};
-  Object.entries(pos).forEach(([id, p]) => {
-    positions[id] = { x: p.x, y: p.y };
+function savePositions(){
+  const positions={};
+  Object.entries(_pos).forEach(([id, p])=>{
+    positions[id]={x: p.x, y: p.y};
   });
   localStorage.setItem("treePositions4.0", JSON.stringify(positions));
 }
 
-// Charge positions sauvegardées
-function loadSavedPositions() {
-  const stored = localStorage.getItem("treePositions4.0");
+function loadSavedPositions(){
+  const stored=localStorage.getItem("treePositions4.0");
   return stored ? JSON.parse(stored) : null;
 }
 
-// Export JSON
-function exportPositions() {
-  const positions = {};
-  Object.entries(pos).forEach(([id, p]) => {
-    positions[id] = { x: p.x, y: p.y };
+function exportPositions(){
+  const positions={};
+  Object.entries(_pos).forEach(([id, p])=>{
+    positions[id]={x: p.x, y: p.y};
   });
-  const data = {
+  const data={
     version: "4.0",
     timestamp: new Date().toISOString(),
     positions: positions
   };
-  const blob = new Blob([JSON.stringify(data, null, 2)], {type: "application/json"});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `tree-layout-${new Date().getTime()}.json`;
+  const blob=new Blob([JSON.stringify(data, null, 2)], {type: "application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;
+  a.download=`tree-layout-${new Date().getTime()}.json`;
   a.click();
   URL.revokeObjectURL(url);
 }
 
-// Import JSON
-function importPositions() {
-  const input = document.createElement("input");
-  input.type = "file";
-  input.accept = ".json";
-  input.addEventListener("change", (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const data = JSON.parse(ev.target.result);
-        if (data.positions) {
+function importPositions(){
+  const input=document.createElement("input");
+  input.type="file";
+  input.accept=".json";
+  input.addEventListener("change", (e)=>{
+    const file=e.target.files[0];
+    if(!file) return;
+    const reader=new FileReader();
+    reader.onload=(ev)=>{
+      try{
+        const data=JSON.parse(ev.target.result);
+        if(data.positions){
           localStorage.setItem("treePositions4.0", JSON.stringify(data.positions));
           location.reload();
         }
-      } catch(err) {
+      }catch(err){
         alert("Erreur : JSON invalide");
       }
     };
@@ -96,88 +93,120 @@ function importPositions() {
   input.click();
 }
 
-// Reset positions
-function resetPositions() {
-  if (confirm("Réinitialiser toutes les positions ?")) {
+function resetPositions(){
+  if(confirm("Réinitialiser toutes les positions ?")){
     localStorage.removeItem("treePositions4.0");
     location.reload();
   }
 }
 
+function addControls(){
+  const container=document.getElementById("tree-container");
+  if(container.querySelector("#tree-controls")) return;
+  
+  const controls=document.createElement("div");
+  controls.id="tree-controls";
+  controls.style.cssText=`
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    z-index: 100;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    background: rgba(255,255,255,0.95);
+    padding: 8px;
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  `;
+  
+  const buttons=[
+    {id: "resetBtn", labelFr: "🔄 Réinitialiser", labelEn: "🔄 Reset", onclick: resetPositions},
+    {id: "saveBtn", labelFr: "💾 Exporter", labelEn: "💾 Save", onclick: exportPositions},
+    {id: "loadBtn", labelFr: "📂 Importer", labelEn: "📂 Load", onclick: importPositions}
+  ];
+  
+  buttons.forEach(btn=>{
+    const button=document.createElement("button");
+    button.id=btn.id;
+    button.dataset.labelFr=btn.labelFr;
+    button.dataset.labelEn=btn.labelEn;
+    
+    // Déterminer la langue actuelle
+    const currentLang=window.currentLang || "fr";
+    button.textContent=currentLang==="fr" ? btn.labelFr : btn.labelEn;
+    
+    button.style.cssText=`
+      padding: 6px 10px;
+      background: white;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+      font-family: 'DM Sans', sans-serif;
+      white-space: nowrap;
+    `;
+    button.onmouseover=()=>button.style.background="#f5f5f5";
+    button.onmouseout=()=>button.style.background="white";
+    button.onclick=btn.onclick;
+    controls.appendChild(button);
+  });
+  
+  container.appendChild(controls);
+  
+  // Écouter les changements de langue
+  const origSetLang=window.setLang;
+  window.setLang=function(lang){
+    if(origSetLang) origSetLang(lang);
+    updateControlsLanguage(lang);
+  };
+}
+
+function updateControlsLanguage(lang){
+  const controls=document.getElementById("tree-controls");
+  if(!controls) return;
+  
+  const buttons=controls.querySelectorAll("button");
+  buttons.forEach(btn=>{
+    const key=lang==="fr" ? "labelFr" : "labelEn";
+    btn.textContent=btn.dataset[key] || btn.textContent;
+  });
+}
+
 firebase.auth().onAuthStateChanged(async user=>{
   if(!user) return;
   const snap=await db.collection("persons").get();
-  if(snap.empty){ document.getElementById("loadingMsg").textContent="Aucune personne."; return; }
-  const P={};
+  if(snap.empty){
+    document.getElementById("loadingMsg").textContent="Aucune personne.";
+    return;
+  }
+  
+  _P={};
   snap.forEach(d=>{
     const x=d.data();
-    P[d.id]={
-      id:d.id, 
+    _P[d.id]={
+      id:d.id,
       n:(x.firstName||"")+" "+(x.lastName||""),
-      nick:v(x.nickname), 
-      bd:v(x.birthDate), 
+      nick:v(x.nickname),
+      bd:v(x.birthDate),
       dd:v(x.deathDate),
-      fid:v(x.fatherId), 
-      mid:v(x.motherId), 
+      fid:v(x.fatherId),
+      mid:v(x.motherId),
       sid:v(x.spouseId),
       spouses: x.spouses || [],
       hasPhoto:!!(v(x.photoURL))
     };
   });
+  
   document.getElementById("loadingMsg").style.display="none";
   document.getElementById("tree-container").style.display="block";
   
-  // Ajouter UI contrôles
   addControls();
-  
-  drawTree(P);
+  drawTree(_P);
 });
 
-function addControls() {
-  const container = document.getElementById("tree-container");
-  if (container.querySelector("#tree-controls")) return;
-  
-  const controls = document.createElement("div");
-  controls.id = "tree-controls";
-  controls.style.cssText = `
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    z-index: 100;
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-  `;
-  
-  const buttons = [
-    { id: "resetBtn", text: "🔄 Reset", onclick: resetPositions },
-    { id: "saveBtn", text: "💾 Save", onclick: exportPositions },
-    { id: "loadBtn", text: "📂 Load", onclick: importPositions }
-  ];
-  
-  buttons.forEach(btn => {
-    const button = document.createElement("button");
-    button.id = btn.id;
-    button.textContent = btn.text;
-    button.style.cssText = `
-      padding: 8px 12px;
-      background: white;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 12px;
-      font-family: 'DM Sans', sans-serif;
-    `;
-    button.onmouseover = () => button.style.background = "#f0f0f0";
-    button.onmouseout = () => button.style.background = "white";
-    button.onclick = btn.onclick;
-    controls.appendChild(button);
-  });
-  
-  container.appendChild(controls);
-}
-
 function drawTree(P){
+  _P=P;
   const ids=Object.keys(P);
 
   const gen={};
@@ -216,21 +245,13 @@ function drawTree(P){
 
   const spouseOf={};
   ids.forEach(id=>{
-    const p = P[id];
-    
-    if (p.spouses && p.spouses.length > 0) {
-      let activeSpouse = p.spouses.find(s => !s.endReason);
-      if (!activeSpouse) {
-        activeSpouse = p.spouses[p.spouses.length - 1];
-      }
-      if (activeSpouse && P[activeSpouse.spouseId]) {
-        spouseOf[id] = activeSpouse.spouseId;
-      }
+    const p=P[id];
+    if(p.spouses && p.spouses.length>0){
+      let activeSpouse=p.spouses.find(s => !s.endReason);
+      if(!activeSpouse) activeSpouse=p.spouses[p.spouses.length-1];
+      if(activeSpouse && P[activeSpouse.spouseId]) spouseOf[id]=activeSpouse.spouseId;
     }
-    
-    if (!spouseOf[id] && p.sid && P[p.sid]) {
-      spouseOf[id] = p.sid;
-    }
+    if(!spouseOf[id] && p.sid && P[p.sid]) spouseOf[id]=p.sid;
   });
 
   const subtreeW={};
@@ -243,7 +264,7 @@ function drawTree(P){
       if(partner){
         if(cfid===owner && cmid===partner) children.push(cid);
         else if(cfid===partner && cmid===owner) children.push(cid);
-      } else {
+      }else{
         if((cfid===owner&&!cmid)||(cmid===owner&&!cfid)) children.push(cid);
       }
     });
@@ -262,15 +283,15 @@ function drawTree(P){
   }
   ids.forEach(id=>{ const sp=spouseOf[id]; const owner=sp&&id>sp?sp:id; calcWidth(owner); });
 
-  pos={};
+  _pos={};
   const placed=new Set();
 
   function placeCouple(owner,cx,y){
     const partner=spouseOf[owner];
     if(partner&&P[partner]){
-      pos[owner]={x:cx-NW-CGAP/2,y}; pos[partner]={x:cx+CGAP/2,y};
+      _pos[owner]={x:cx-NW-CGAP/2,y}; _pos[partner]={x:cx+CGAP/2,y};
       placed.add(owner); placed.add(partner);
-    } else { pos[owner]={x:cx-NW/2,y}; placed.add(owner); }
+    }else{ _pos[owner]={x:cx-NW/2,y}; placed.add(owner); }
   }
 
   function placeSubtree(owner,cx,y){
@@ -284,7 +305,7 @@ function drawTree(P){
       if(partner){
         if(cfid===owner && cmid===partner) children.push(cid);
         else if(cfid===partner && cmid===owner) children.push(cid);
-      } else {
+      }else{
         if((cfid===owner&&!cmid)||(cmid===owner&&!cfid)) children.push(cid);
       }
     });
@@ -300,16 +321,16 @@ function drawTree(P){
     childOwners.forEach((co,i)=>{ totalW+=calcWidth(co)+(i>0?HGAP:0); });
     let startX=cx-totalW/2;
     
-    let currentY = y+NH;
+    let currentY=y+NH;
     childOwners.forEach((co, idx)=>{
       const w=calcWidth(co);
-      const yOffset = (idx % 2 === 0) ? VGAP : HALF_VGAP;
+      const yOffset=(idx%2===0) ? VGAP : HALF_VGAP;
       placeSubtree(co, startX+w/2, currentY+yOffset);
       startX+=w+HGAP;
-      if(idx % 2 === 1) currentY += HALF_VGAP;
+      if(idx%2===1) currentY+=HALF_VGAP;
     });
     
-    const childCxs=children.map(cid=>pos[cid]).filter(Boolean).map(p=>p.x+NW/2);
+    const childCxs=children.map(cid=>_pos[cid]).filter(Boolean).map(p=>p.x+NW/2);
     const childCenter=childCxs.length>0?(Math.min(...childCxs)+Math.max(...childCxs))/2:cx;
     placeCouple(owner,childCenter,y);
   }
@@ -321,13 +342,11 @@ function drawTree(P){
   rootOwners.forEach((ro,i)=>{ totalRootW+=calcWidth(ro)+(i>0?HGAP:0); });
   let rootX=-totalRootW/2;
   rootOwners.forEach(ro=>{ const w=calcWidth(ro); placeSubtree(ro,rootX+w/2,0); rootX+=w+HGAP; });
-  ids.forEach(id=>{ if(!placed.has(id)){pos[id]={x:0,y:gen[id]*(NH+VGAP)};placed.add(id);} });
+  ids.forEach(id=>{ if(!placed.has(id)){_pos[id]={x:0,y:gen[id]*(NH+VGAP)};placed.add(id);} });
 
-  // CHARGER positions sauvegardées
-  const savedPos = loadSavedPositions();
-  if (savedPos) {
-    Object.assign(pos, savedPos);
-  }
+  // Charger positions sauvegardées
+  const savedPos=loadSavedPositions();
+  if(savedPos) Object.assign(_pos, savedPos);
 
   const wrapper=document.getElementById("tree-container");
   _W=wrapper.clientWidth||window.innerWidth;
@@ -342,47 +361,42 @@ function drawTree(P){
     .attr("font-family","'DM Sans',sans-serif")
     .text("v"+TREE_VERSION);
 
-  _g=_svg.append("g").attr("transform",`translate(${_W/2},40)`);
+  _svgContainer=_svg.append("g").attr("transform",`translate(${_W/2},40)`);
+  _g=_svgContainer;
 
   _zoom=d3.zoom().scaleExtent([0.1,3]).on("zoom",e=>_g.attr("transform",e.transform));
   _svg.call(_zoom);
   _svg.call(_zoom.transform, d3.zoomIdentity.translate(_W/2,40));
 
+  // Lignes conjoints
   const spDone=new Set();
   ids.forEach(id=>{
-    const p = P[id];
-    const spousesToShow = [];
+    const p=P[id];
+    const spousesToShow=[];
     
-    if (p.spouses && p.spouses.length > 0) {
-      p.spouses.forEach(s => {
-        if (s.spouseId && P[s.spouseId]) {
-          spousesToShow.push({ 
-            id: s.spouseId, 
-            active: !s.endReason,
-            endReason: s.endReason 
-          });
+    if(p.spouses && p.spouses.length>0){
+      p.spouses.forEach(s=>{
+        if(s.spouseId && P[s.spouseId]){
+          spousesToShow.push({id: s.spouseId, active: !s.endReason, endReason: s.endReason});
         }
       });
-    } else if (p.sid && P[p.sid]) {
-      spousesToShow.push({ id: p.sid, active: true, endReason: null });
+    }else if(p.sid && P[p.sid]){
+      spousesToShow.push({id: p.sid, active: true, endReason: null});
     }
     
-    spousesToShow.forEach(spouse => {
+    spousesToShow.forEach(spouse=>{
       const k=[id, spouse.id].sort().join("~");
       if(spDone.has(k)) return;
       spDone.add(k);
       
-      const pa=pos[id], pb=pos[spouse.id];
+      const pa=_pos[id], pb=_pos[spouse.id];
       if(!pa||!pb) return;
       
       const lx=Math.min(pa.x,pb.x)+NW, rx=Math.max(pa.x,pb.x), y=pa.y+NH/2;
       
-      let strokeColor = "#aaaacc";
-      let strokeDash = "5,4";
-      if (!spouse.active) {
-        strokeColor = "#d0d0d8";
-        strokeDash = "2,2";
-      }
+      let strokeColor="#aaaacc";
+      let strokeDash="5,4";
+      if(!spouse.active){ strokeColor="#d0d0d8"; strokeDash="2,2"; }
       
       _g.append("line")
         .attr("x1",lx).attr("y1",y).attr("x2",rx).attr("y2",y)
@@ -393,8 +407,9 @@ function drawTree(P){
     });
   });
 
+  // Lignes parent-enfant
   Object.values(fams).forEach(({fid,mid,ch})=>{
-    const pf=fid?pos[fid]:null, pm=mid?pos[mid]:null;
+    const pf=fid?_pos[fid]:null, pm=mid?_pos[mid]:null;
     if(!pf&&!pm) return;
     const fCx=pf?pf.x+NW/2:null, mCx=pm?pm.x+NW/2:null;
     const jX=fCx!==null&&mCx!==null?(fCx+mCx)/2:(fCx||mCx);
@@ -405,14 +420,14 @@ function drawTree(P){
     if(mCx!==null&&mCx!==fCx)
       _g.append("path").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
         .attr("d",`M${mCx},${pY} V${jY} H${jX}`);
-    const cps=ch.map(cid=>pos[cid]).filter(Boolean);
+    const cps=ch.map(cid=>_pos[cid]).filter(Boolean);
     if(!cps.length) return;
     const cxs=cps.map(cp=>cp.x+NW/2);
     const mnX=Math.min(...cxs), mxX=Math.max(...cxs);
     if(cps.length===1){
       _g.append("line").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
         .attr("x1",jX).attr("y1",jY).attr("x2",cxs[0]).attr("y2",jY);
-    } else {
+    }else{
       _g.append("line").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
         .attr("x1",mnX).attr("y1",jY).attr("x2",mxX).attr("y2",jY);
       if(jX<mnX) _g.append("line").attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5).attr("x1",jX).attr("y1",jY).attr("x2",mnX).attr("y2",jY);
@@ -424,14 +439,15 @@ function drawTree(P){
     });
   });
 
-  // ── NŒUDS DRAGGABLES ─────────────────────────────────────
+  // Nœuds
   ids.forEach(id=>{
-    const p=P[id], pt=pos[id]; if(!pt) return;
+    const p=P[id], pt=_pos[id]; if(!pt) return;
 
-    const grp=_g.append("g").style("cursor","grab")
-      .on("mousedown", function(event) {
-        dragStart(event, id);
-      })
+    const grp=_g.append("g")
+      .attr("class","node")
+      .attr("data-id",id)
+      .style("cursor","grab")
+      .on("mousedown", onNodeMouseDown)
       .on("click",()=>location.href="person.html?id="+id)
       .on("mouseenter",function(){ grp.select("rect").attr("stroke","#0071e3").attr("stroke-width",2); })
       .on("mouseleave",function(){ if(!draggedId) grp.select("rect").attr("stroke",p.dd?"#c8c8cc":"#d1d1d6").attr("stroke-width",1.5); });
@@ -484,49 +500,51 @@ function drawTree(P){
   });
 }
 
-// Drag & drop handlers
-function dragStart(event, id) {
-  draggedId = id;
-  const rect = event.currentTarget.getBoundingClientRect();
-  const pt = pos[id];
-  dragOffset.x = event.clientX - rect.left;
-  dragOffset.y = event.clientY - rect.top;
+// Drag handlers
+function onNodeMouseDown(event){
+  draggedId=event.currentTarget.getAttribute("data-id");
+  const pt=_pos[draggedId];
+  const svg=_svg.node();
+  const rect=svg.getBoundingClientRect();
+  
+  dragStartX=event.clientX - rect.left;
+  dragStartY=event.clientY - rect.top;
+  
   event.stopPropagation();
 }
 
-document.addEventListener("mousemove", function(event) {
-  if (!draggedId || !pos[draggedId]) return;
+document.addEventListener("mousemove", function(event){
+  if(!draggedId || !_pos[draggedId]) return;
   
-  const container = document.getElementById("tree-container");
-  const rect = container.getBoundingClientRect();
+  const svg=_svg.node();
+  if(!svg) return;
   
-  // Calculer nouvelle position relative au SVG viewport
-  let newX = event.clientX - rect.left - _W/2 - dragOffset.x;
-  let newY = event.clientY - rect.top - dragOffset.y;
+  const rect=svg.getBoundingClientRect();
+  const currentX=event.clientX - rect.left;
+  const currentY=event.clientY - rect.top;
   
-  // Appliquer zoom inverse (simplifié)
-  pos[draggedId].x = newX;
-  pos[draggedId].y = newY;
+  const deltaX=currentX-dragStartX;
+  const deltaY=currentY-dragStartY;
   
-  // Redessiner
-  redrawAfterDrag();
+  _pos[draggedId].x+=deltaX;
+  _pos[draggedId].y+=deltaY;
+  
+  dragStartX=currentX;
+  dragStartY=currentY;
+  
+  // Redessiner le nœud
+  const node=_g.select(`[data-id="${draggedId}"]`);
+  const pt=_pos[draggedId];
+  node.select("rect").attr("x",pt.x).attr("y",pt.y);
+  node.selectAll("text").attr("x", pt.x+NW/2).attr("y", (i)=>{
+    if(i===0) return pt.y+26;
+    return pt.y+26+i*14;
+  });
 });
 
-document.addEventListener("mouseup", function() {
-  if (draggedId) {
+document.addEventListener("mouseup", function(){
+  if(draggedId){
     savePositions();
-    draggedId = null;
+    draggedId=null;
   }
 });
-
-function redrawAfterDrag() {
-  if (!_g) return;
-  
-  // Redessiner seulement le nœud déplacé (perf)
-  const pt = pos[draggedId];
-  if (!pt) return;
-  
-  // Supprimer et redessiner les lignes (simplifié)
-  // Pour une vraie perf, utiliser update pattern D3
-  d3.selectAll(".link").remove();
-}
