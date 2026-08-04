@@ -1,10 +1,9 @@
-// ARBRE GÉNÉALOGIQUE v4.3.0 — MARIAGES SÉPARÉS + CODE COULEUR
-// - Badges M1, M2, M3... sur les conjoints
-// - Code couleur par mariage
-// - Enfants séparés horizontalement par mariage
-// - Lignes distinctes par mariage
+// ARBRE GÉNÉALOGIQUE v4.2.1 — COULEURS PAR MARIAGE (SIMPLE)
+// - Reprend v4.2 complet
+// - Ajoute couleurs par mariage aux lignes
+// - Pas de badges, pas de changement de placement
 
-const TREE_VERSION = "4.3.0";
+const TREE_VERSION = "4.2.1";
 
 const MARRIAGE_COLORS = [
   "#FF6B6B", // M1 - Rouge
@@ -34,7 +33,7 @@ let _svg=null, _zoom=null, _W=0, _H=0;
 let _g=null;
 let _P={};
 let _pos={};
-let _marriages={}; // Marriages par personne
+let _fams={};
 let _spouseOf={};
 
 let draggedId=null;
@@ -217,7 +216,6 @@ function drawTree(P){
   _P=P;
   const ids=Object.keys(P);
 
-  // ── GÉNÉRATIONS ──────────────────────────
   const gen={};
   ids.forEach(id=>{ if(!P[id].fid&&!P[id].mid) gen[id]=0; });
   let changed=true;
@@ -242,49 +240,16 @@ function drawTree(P){
   }
   ids.forEach(id=>{ if(gen[id]===undefined) gen[id]=0; });
 
-  // ── MARIAGES PAR PERSONNE ────────────────
-  _marriages={};
+  _fams={};
   ids.forEach(id=>{
-    const p=P[id];
-    if(!p.spouses || p.spouses.length===0) return;
-    
-    _marriages[id]=[];
-    p.spouses.forEach((spouse, idx)=>{
-      if(!P[spouse.spouseId]) return;
-      _marriages[id].push({
-        number: idx+1,
-        spouseId: spouse.spouseId,
-        color: MARRIAGE_COLORS[idx % MARRIAGE_COLORS.length],
-        children: []
-      });
-    });
-  });
-  
-  // Assigner enfants aux mariages
-  ids.forEach(cid=>{
-    const child=P[cid];
-    if(!child.fid && !child.mid) return;
-    
-    // Enfant de qui ?
-    if(child.fid && _marriages[child.fid]){
-      const marriages=_marriages[child.fid];
-      marriages.forEach(m=>{
-        if(m.spouseId===child.mid || (!child.mid && m.number===1)){
-          m.children.push(cid);
-        }
-      });
-    }
-    if(child.mid && _marriages[child.mid]){
-      const marriages=_marriages[child.mid];
-      marriages.forEach(m=>{
-        if(m.spouseId===child.fid || (!child.fid && m.number===1)){
-          if(!m.children.includes(cid)) m.children.push(cid);
-        }
-      });
-    }
+    const fid=P[id].fid&&P[P[id].fid]?P[id].fid:null;
+    const mid=P[id].mid&&P[P[id].mid]?P[id].mid:null;
+    if(!fid&&!mid) return;
+    const k=(fid||"X")+"##"+(mid||"X");
+    if(!_fams[k]) _fams[k]={fid,mid,ch:[]};
+    _fams[k].ch.push(id);
   });
 
-  // ── CONJOINTS ────────────────────────────
   _spouseOf={};
   ids.forEach(id=>{
     const p=P[id];
@@ -296,121 +261,94 @@ function drawTree(P){
     if(!_spouseOf[id] && p.sid && P[p.sid]) _spouseOf[id]=p.sid;
   });
 
-  // ── PLACEMENT ────────────────────────────
+  const subtreeW={};
+  function calcWidth(owner){
+    if(subtreeW[owner]!==undefined) return subtreeW[owner];
+    const partner=_spouseOf[owner];
+    let children=[];
+    ids.forEach(cid=>{
+      const cfid=P[cid].fid, cmid=P[cid].mid;
+      if(partner){
+        if(cfid===owner && cmid===partner) children.push(cid);
+        else if(cfid===partner && cmid===owner) children.push(cid);
+      }else{
+        if((cfid===owner&&!cmid)||(cmid===owner&&!cfid)) children.push(cid);
+      }
+    });
+    children=[...new Set(children)];
+    const myW=partner?NW*2+CGAP:NW;
+    if(children.length===0){ subtreeW[owner]=myW; if(partner) subtreeW[partner]=myW; return myW; }
+    let childTotalW=0;
+    const seen=new Set();
+    children.forEach(cid=>{
+      const csp=_spouseOf[cid]; const co=csp&&cid>csp?csp:cid;
+      if(seen.has(co)) return; seen.add(co);
+      childTotalW+=calcWidth(co)+(childTotalW>0?HGAP:0);
+    });
+    const w=Math.max(myW,childTotalW);
+    subtreeW[owner]=w; if(partner) subtreeW[partner]=myW; return w;
+  }
+  ids.forEach(id=>{ const sp=_spouseOf[id]; const owner=sp&&id>sp?sp:id; calcWidth(owner); });
+
   _pos={};
   const placed=new Set();
 
   function placeCouple(owner,cx,y){
     const partner=_spouseOf[owner];
     if(partner&&P[partner]){
-      _pos[owner]={x:cx-NW-CGAP/2,y}; 
-      _pos[partner]={x:cx+CGAP/2,y};
-      placed.add(owner); 
-      placed.add(partner);
-    }else{ 
-      _pos[owner]={x:cx-NW/2,y}; 
-      placed.add(owner); 
-    }
+      _pos[owner]={x:cx-NW-CGAP/2,y}; _pos[partner]={x:cx+CGAP/2,y};
+      placed.add(owner); placed.add(partner);
+    }else{ _pos[owner]={x:cx-NW/2,y}; placed.add(owner); }
   }
 
   function placeSubtree(owner,cx,y){
     if(placed.has(owner)) return;
     const partner=_spouseOf[owner];
     if(partner&&placed.has(partner)) return;
-
-    // ✅ FIX v4.3 : Placer par MARIAGE
-    if(_marriages[owner] && _marriages[owner].length>0){
-      let currentY=y+NH;
-      _marriages[owner].forEach((marriage, mIdx)=>{
-        const children=marriage.children;
-        if(children.length===0) return;
-        
-        // Placer les enfants de ce mariage
-        const childOwners=[];
-        const seen=new Set();
-        children.forEach(cid=>{
-          const csp=_spouseOf[cid];
-          const co=csp&&cid>csp?csp:cid;
-          if(!seen.has(co)){seen.add(co); childOwners.push(co);}
-        });
-        
-        let totalW=0;
-        childOwners.forEach((co,i)=>{
-          const w=calcWidth(co);
-          totalW+=w+(i>0?HGAP:0);
-        });
-        let startX=cx-totalW/2;
-        
-        childOwners.forEach((co, idx)=>{
-          const w=calcWidth(co);
-          placeSubtree(co, startX+w/2, currentY);
-          startX+=w+HGAP;
-        });
-        
-        // Avancer Y pour prochain mariage
-        currentY+=VGAP+NH;
-      });
-      
-      placeCouple(owner, cx, y);
-    } else {
-      // Pas de mariages multiples, placement normal
-      let children=[];
-      ids.forEach(cid=>{
-        if(placed.has(cid)) return;
-        const cfid=P[cid].fid, cmid=P[cid].mid;
-        if(partner){
-          if(cfid===owner && cmid===partner) children.push(cid);
-          else if(cfid===partner && cmid===owner) children.push(cid);
-        }else{
-          if((cfid===owner&&!cmid)||(cmid===owner&&!cfid)) children.push(cid);
-        }
-      });
-      children=[...new Set(children)];
-      
-      if(children.length===0){ 
-        placeCouple(owner,cx,y); 
-        return; 
+    let children=[];
+    ids.forEach(cid=>{
+      if(placed.has(cid)) return;
+      const cfid=P[cid].fid, cmid=P[cid].mid;
+      if(partner){
+        if(cfid===owner && cmid===partner) children.push(cid);
+        else if(cfid===partner && cmid===owner) children.push(cid);
+      }else{
+        if((cfid===owner&&!cmid)||(cmid===owner&&!cfid)) children.push(cid);
       }
-      
-      const childOwners=[];
-      const seen=new Set();
-      children.forEach(cid=>{
-        const csp=_spouseOf[cid]; 
-        const co=csp&&cid>csp?csp:cid;
-        if(!seen.has(co)){seen.add(co);childOwners.push(co);}
-      });
-      
-      let totalW=0;
-      childOwners.forEach((co,i)=>{ totalW+=calcWidth(co)+(i>0?HGAP:0); });
-      let startX=cx-totalW/2;
-      
-      let currentY=y+NH;
-      childOwners.forEach((co, idx)=>{
-        const w=calcWidth(co);
-        const yOffset=(idx%2===0) ? VGAP : HALF_VGAP;
-        placeSubtree(co, startX+w/2, currentY+yOffset);
-        startX+=w+HGAP;
-        if(idx%2===1) currentY+=HALF_VGAP;
-      });
-      
-      const childCxs=children.map(cid=>_pos[cid]).filter(Boolean).map(p=>p.x+NW/2);
-      const childCenter=childCxs.length>0?(Math.min(...childCxs)+Math.max(...childCxs))/2:cx;
-      placeCouple(owner,childCenter,y);
-    }
-  }
-
-  function calcWidth(owner){
-    const partner=_spouseOf[owner];
-    const myW=partner?NW*2+CGAP:NW;
-    // Simplifié pour perf
-    return myW;
+    });
+    children=[...new Set(children)];
+    if(children.length===0){ placeCouple(owner,cx,y); return; }
+    const childOwners=[];
+    const seen=new Set();
+    children.forEach(cid=>{
+      const csp=_spouseOf[cid]; const co=csp&&cid>csp?csp:cid;
+      if(!seen.has(co)){seen.add(co);childOwners.push(co);}
+    });
+    let totalW=0;
+    childOwners.forEach((co,i)=>{ totalW+=calcWidth(co)+(i>0?HGAP:0); });
+    let startX=cx-totalW/2;
+    
+    let currentY=y+NH;
+    childOwners.forEach((co, idx)=>{
+      const w=calcWidth(co);
+      const yOffset=(idx%2===0) ? VGAP : HALF_VGAP;
+      placeSubtree(co, startX+w/2, currentY+yOffset);
+      startX+=w+HGAP;
+      if(idx%2===1) currentY+=HALF_VGAP;
+    });
+    
+    const childCxs=children.map(cid=>_pos[cid]).filter(Boolean).map(p=>p.x+NW/2);
+    const childCenter=childCxs.length>0?(Math.min(...childCxs)+Math.max(...childCxs))/2:cx;
+    placeCouple(owner,childCenter,y);
   }
 
   const roots=ids.filter(id=>gen[id]===0&&!P[id].fid&&!P[id].mid);
   const rootOwners=[]; const rootSeen=new Set();
   roots.forEach(id=>{ const sp=_spouseOf[id]; const owner=sp&&id>sp?sp:id; if(!rootSeen.has(owner)){rootSeen.add(owner);rootOwners.push(owner);} });
-  let rootX=-100;
-  rootOwners.forEach(ro=>{ placeSubtree(ro,rootX,0); rootX+=300; });
+  let totalRootW=0;
+  rootOwners.forEach((ro,i)=>{ totalRootW+=calcWidth(ro)+(i>0?HGAP:0); });
+  let rootX=-totalRootW/2;
+  rootOwners.forEach(ro=>{ const w=calcWidth(ro); placeSubtree(ro,rootX+w/2,0); rootX+=w+HGAP; });
   ids.forEach(id=>{ if(!placed.has(id)){_pos[id]={x:0,y:gen[id]*(NH+VGAP)};placed.add(id);} });
 
   const savedPos=loadSavedPositions();
@@ -439,116 +377,130 @@ function drawTree(P){
   redrawAllNodes();
 }
 
+// Récupérer numéro mariage pour un enfant
+function getMarriageNumber(childId){
+  if(!_P[childId]) return 0;
+  const child=_P[childId];
+  const fid=child.fid, mid=child.mid;
+  
+  if(!fid && !mid) return 0;
+  
+  // Chercher le numéro dans les spouses du père ou de la mère
+  const parentId = fid || mid;
+  const parent = _P[parentId];
+  if(!parent || !parent.spouses) return 0;
+  
+  const otherParentId = fid ? mid : fid;
+  for(let i=0; i<parent.spouses.length; i++){
+    const spouse = parent.spouses[i];
+    if(spouse.spouseId === otherParentId || (!otherParentId && i===0)){
+      return i;
+    }
+  }
+  return 0;
+}
+
 function redrawAllLines(){
-  d3.selectAll(".link").remove();
+  d3.selectAll(".link-spouse").remove();
+  d3.selectAll(".link-parent").remove();
 
   const ids=Object.keys(_P);
   
-  // ✅ LIGNES CONJOINTS AVEC COULEUR PAR MARIAGE
+  // Lignes conjoints
+  const spDone=new Set();
   ids.forEach(id=>{
-    if(!_marriages[id] || _marriages[id].length===0) return;
+    const p=_P[id];
+    const spousesToShow=[];
     
-    _marriages[id].forEach(marriage=>{
-      const spouseId=marriage.spouseId;
-      const pa=_pos[id], pb=_pos[spouseId];
+    if(p.spouses && p.spouses.length>0){
+      p.spouses.forEach(s=>{
+        if(s.spouseId && _P[s.spouseId]){
+          spousesToShow.push({id: s.spouseId, active: !s.endReason, endReason: s.endReason});
+        }
+      });
+    }else if(p.sid && _P[p.sid]){
+      spousesToShow.push({id: p.sid, active: true, endReason: null});
+    }
+    
+    spousesToShow.forEach((spouse, idx)=>{
+      const k=[id, spouse.id].sort().join("~");
+      if(spDone.has(k)) return;
+      spDone.add(k);
+      
+      const pa=_pos[id], pb=_pos[spouse.id];
       if(!pa||!pb) return;
       
       const lx=Math.min(pa.x,pb.x)+NW, rx=Math.max(pa.x,pb.x), y=pa.y+NH/2;
       
+      let strokeColor=MARRIAGE_COLORS[idx % MARRIAGE_COLORS.length];
+      let strokeDash="5,4";
+      if(!spouse.active){ strokeDash="2,2"; }
+      
       _g.append("line")
-        .attr("class","link")
+        .attr("class","link-spouse")
         .attr("x1",lx).attr("y1",y).attr("x2",rx).attr("y2",y)
-        .attr("stroke", marriage.color)
-        .attr("stroke-width", 2)
-        .attr("stroke-dasharray", "5,4")
+        .attr("stroke", strokeColor)
+        .attr("stroke-width", spouse.active ? 1.5 : 1)
+        .attr("stroke-dasharray", strokeDash)
         .attr("fill","none");
-      
-      // Badge M1, M2, etc.
-      const badgeX=(lx+rx)/2;
-      _g.append("circle")
-        .attr("cx", badgeX).attr("cy", y)
-        .attr("r", 10)
-        .attr("fill", marriage.color)
-        .attr("opacity", 0.8);
-      
-      _g.append("text")
-        .attr("x", badgeX).attr("y", y+4)
-        .attr("text-anchor", "middle")
-        .attr("font-size", 10)
-        .attr("font-weight", "bold")
-        .attr("fill", "white")
-        .text("M"+marriage.number);
     });
   });
 
-  // LIGNES PARENT-ENFANT
-  ids.forEach(id=>{
-    if(!_marriages[id] || _marriages[id].length===0) return;
+  // Lignes parent-enfant
+  Object.values(_fams).forEach(({fid,mid,ch})=>{
+    const pf=fid?_pos[fid]:null, pm=mid?_pos[mid]:null;
+    if(!pf&&!pm) return;
+    const fCx=pf?pf.x+NW/2:null, mCx=pm?pm.x+NW/2:null;
+    const jX=fCx!==null&&mCx!==null?(fCx+mCx)/2:(fCx||mCx);
+    const pY=(pf||pm).y+NH, jY=pY+VGAP*0.35;
     
-    _marriages[id].forEach(marriage=>{
-      const children=marriage.children;
-      if(children.length===0) return;
-      
-      const ppos=_pos[id];
-      if(!ppos) return;
-      
-      const pCx=ppos.x+NW/2;
-      const pY=ppos.y+NH;
-      const jY=pY+VGAP*0.35;
-      
-      const cps=children.map(cid=>_pos[cid]).filter(Boolean);
-      if(!cps.length) return;
-      
-      const cxs=cps.map(cp=>cp.x+NW/2);
-      const mnX=Math.min(...cxs), mxX=Math.max(...cxs);
-      
-      // Ligne verticale depuis parent
+    if(fCx!==null)
+      _g.append("path")
+        .attr("class","link-parent")
+        .attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
+        .attr("d",`M${fCx},${pY} V${jY} H${jX}`);
+    
+    if(mCx!==null&&mCx!==fCx)
+      _g.append("path")
+        .attr("class","link-parent")
+        .attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
+        .attr("d",`M${mCx},${pY} V${jY} H${jX}`);
+    
+    const cps=ch.map(cid=>_pos[cid]).filter(Boolean);
+    if(!cps.length) return;
+    const cxs=cps.map(cp=>cp.x+NW/2);
+    const mnX=Math.min(...cxs), mxX=Math.max(...cxs);
+    
+    if(cps.length===1){
+      const childIdx=getMarriageNumber(ch[0]);
+      const color=MARRIAGE_COLORS[childIdx % MARRIAGE_COLORS.length];
       _g.append("line")
-        .attr("class","link")
-        .attr("x1", pCx).attr("y1", pY)
-        .attr("x2", pCx).attr("y2", jY)
-        .attr("stroke", marriage.color)
-        .attr("stroke-width", 2);
-      
-      // Ligne horizontale
-      if(cps.length===1){
-        _g.append("line")
-          .attr("class","link")
-          .attr("x1", pCx).attr("y1", jY)
-          .attr("x2", cxs[0]).attr("y2", jY)
-          .attr("stroke", marriage.color)
-          .attr("stroke-width", 2);
-      }else{
-        _g.append("line")
-          .attr("class","link")
-          .attr("x1", mnX).attr("y1", jY)
-          .attr("x2", mxX).attr("y2", jY)
-          .attr("stroke", marriage.color)
-          .attr("stroke-width", 2);
-        
-        if(pCx<mnX) _g.append("line")
-          .attr("class","link")
-          .attr("x1", pCx).attr("y1", jY)
-          .attr("x2", mnX).attr("y2", jY)
-          .attr("stroke", marriage.color)
-          .attr("stroke-width", 2);
-        else if(pCx>mxX) _g.append("line")
-          .attr("class","link")
-          .attr("x1", mxX).attr("y1", jY)
-          .attr("x2", pCx).attr("y2", jY)
-          .attr("stroke", marriage.color)
-          .attr("stroke-width", 2);
-      }
-      
-      // Lignes verticales vers enfants
-      cps.forEach(cp=>{
-        _g.append("line")
-          .attr("class","link")
-          .attr("x1", cp.x+NW/2).attr("y1", jY)
-          .attr("x2", cp.x+NW/2).attr("y2", cp.y)
-          .attr("stroke", marriage.color)
-          .attr("stroke-width", 2);
-      });
+        .attr("class","link-parent")
+        .attr("fill","none").attr("stroke",color).attr("stroke-width",1.5)
+        .attr("x1",jX).attr("y1",jY).attr("x2",cxs[0]).attr("y2",jY);
+    }else{
+      _g.append("line")
+        .attr("class","link-parent")
+        .attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
+        .attr("x1",mnX).attr("y1",jY).attr("x2",mxX).attr("y2",jY);
+      if(jX<mnX) _g.append("line")
+        .attr("class","link-parent")
+        .attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
+        .attr("x1",jX).attr("y1",jY).attr("x2",mnX).attr("y2",jY);
+      else if(jX>mxX) _g.append("line")
+        .attr("class","link-parent")
+        .attr("fill","none").attr("stroke","#c0c0c8").attr("stroke-width",1.5)
+        .attr("x1",mxX).attr("y1",jY).attr("x2",jX).attr("y2",jY);
+    }
+    
+    // Lignes verticales colorées par mariage
+    cps.forEach((cp, cIdx)=>{
+      const childIdx=getMarriageNumber(ch[cIdx]);
+      const color=MARRIAGE_COLORS[childIdx % MARRIAGE_COLORS.length];
+      _g.append("line")
+        .attr("class","link-parent")
+        .attr("fill","none").attr("stroke",color).attr("stroke-width",1.5)
+        .attr("x1",cp.x+NW/2).attr("y1",jY).attr("x2",cp.x+NW/2).attr("y2",cp.y);
     });
   });
 }
