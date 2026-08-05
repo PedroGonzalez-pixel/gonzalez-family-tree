@@ -1,10 +1,10 @@
-// ARBRE GÉNÉALOGIQUE v4.2.2 — ZOOM, RECENTER, MULTI-SÉLECTION
-// - Fix langue espagnol
-// - Boutons Zoom +/-
-// - Recenter sur personne (ou fit-to-view)
-// - Multi-sélection par rectangle
+// ARBRE GÉNÉALOGIQUE v4.2.3 — CORRECTIONS COMPLÈTES
+// - Langue ES fixée pour tous les boutons
+// - Bouton Recenter EN HAUT À DROITE (fit-to-view toujours)
+// - Rectangle de sélection multiple corrigé
+// - Drag multiple cadres sélectionnés
 
-const TREE_VERSION = "4.2.2";
+const TREE_VERSION = "4.2.3";
 
 const MARRIAGE_COLORS = [
   "#FF6B6B",
@@ -36,7 +36,7 @@ let _P={};
 let _pos={};
 let _fams={};
 let _spouseOf={};
-let _selectedIds=new Set(); // Nœuds sélectionnés
+let _selectedIds=new Set();
 
 let draggedId=null;
 let dragStartX=0, dragStartY=0;
@@ -143,19 +143,6 @@ function fitToView(){
     .call(_zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
 }
 
-function recenterOnSelected(){
-  if(_selectedIds.size===1){
-    const id=Array.from(_selectedIds)[0];
-    const pt=_pos[id];
-    if(!pt) return;
-    
-    _svg.transition().duration(500)
-      .call(_zoom.transform, d3.zoomIdentity.translate(_W/2-pt.x, _H/2-pt.y));
-  }else{
-    fitToView();
-  }
-}
-
 function toggleNodeSelection(id){
   if(_selectedIds.has(id)){
     _selectedIds.delete(id);
@@ -172,61 +159,116 @@ function clearSelection(){
 
 function addControls(){
   const container=document.getElementById("tree-container");
-  if(container.querySelector("#tree-controls")) return;
   
-  const controls=document.createElement("div");
-  controls.id="tree-controls";
-  controls.style.cssText=`
-    position: absolute;
-    bottom: 10px;
-    left: 10px;
-    z-index: 100;
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    background: rgba(255,255,255,0.95);
-    padding: 8px;
-    border-radius: 6px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  `;
-  
-  const buttons=[
-    {id: "zoomInBtn", labelFr: "🔍+", labelEn: "🔍+", labelEs: "🔍+", onclick: zoomIn},
-    {id: "zoomOutBtn", labelFr: "🔍-", labelEn: "🔍-", labelEs: "🔍-", onclick: zoomOut},
-    {id: "recenterBtn", labelFr: "🎯 Centrer", labelEn: "🎯 Center", labelEs: "🎯 Centrar", onclick: recenterOnSelected},
-    {id: "resetBtn", labelFr: "🔄 Réinitialiser", labelEn: "🔄 Reset", labelEs: "🔄 Reiniciar", onclick: resetPositions},
-    {id: "saveBtn", labelFr: "💾 Exporter", labelEn: "💾 Save", labelEs: "💾 Guardar", onclick: exportPositions},
-    {id: "loadBtn", labelFr: "📂 Importer", labelEn: "📂 Load", labelEs: "📂 Cargar", onclick: importPositions}
-  ];
-  
-  buttons.forEach(btn=>{
-    const button=document.createElement("button");
-    button.id=btn.id;
-    button.dataset.labelFr=btn.labelFr;
-    button.dataset.labelEn=btn.labelEn;
-    button.dataset.labelEs=btn.labelEs;
-    
-    const currentLang=window.currentLang || "fr";
-    button.textContent=button.dataset["label"+currentLang.toUpperCase()] || btn.labelFr;
-    
-    button.style.cssText=`
-      padding: 6px 10px;
-      background: white;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 11px;
-      font-family: 'DM Sans', sans-serif;
-      white-space: nowrap;
+  // Boutons BAS GAUCHE
+  if(!container.querySelector("#tree-controls-bottom")){
+    const controlsBottom=document.createElement("div");
+    controlsBottom.id="tree-controls-bottom";
+    controlsBottom.style.cssText=`
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      z-index: 100;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      background: rgba(255,255,255,0.95);
+      padding: 8px;
+      border-radius: 6px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     `;
-    button.onmouseover=()=>button.style.background="#f5f5f5";
-    button.onmouseout=()=>button.style.background="white";
-    button.onclick=btn.onclick;
-    controls.appendChild(button);
-  });
+    
+    const buttons=[
+      {id: "resetBtn", labelFr: "🔄 Réinitialiser", labelEn: "🔄 Reset", labelEs: "🔄 Reiniciar", onclick: resetPositions},
+      {id: "saveBtn", labelFr: "💾 Exporter", labelEn: "💾 Save", labelEs: "💾 Guardar", onclick: exportPositions},
+      {id: "loadBtn", labelFr: "📂 Importer", labelEn: "📂 Load", labelEs: "📂 Cargar", onclick: importPositions}
+    ];
+    
+    buttons.forEach(btn=>{
+      const button=document.createElement("button");
+      button.id=btn.id;
+      button.dataset.labelFr=btn.labelFr;
+      button.dataset.labelEn=btn.labelEn;
+      button.dataset.labelEs=btn.labelEs;
+      
+      const currentLang=window.currentLang || "fr";
+      const langKey="label"+currentLang.toUpperCase();
+      button.textContent=button.dataset[langKey] || btn.labelFr;
+      
+      button.style.cssText=`
+        padding: 6px 10px;
+        background: white;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 11px;
+        font-family: 'DM Sans', sans-serif;
+        white-space: nowrap;
+      `;
+      button.onmouseover=()=>button.style.background="#f5f5f5";
+      button.onmouseout=()=>button.style.background="white";
+      button.onclick=btn.onclick;
+      controlsBottom.appendChild(button);
+    });
+    
+    container.appendChild(controlsBottom);
+  }
   
-  container.appendChild(controls);
+  // Boutons HAUT DROITE
+  if(!container.querySelector("#tree-controls-top")){
+    const controlsTop=document.createElement("div");
+    controlsTop.id="tree-controls-top";
+    controlsTop.style.cssText=`
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 100;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      background: rgba(255,255,255,0.95);
+      padding: 8px;
+      border-radius: 6px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    `;
+    
+    const buttons=[
+      {id: "zoomInBtn", labelFr: "🔍+", labelEn: "🔍+", labelEs: "🔍+", onclick: zoomIn},
+      {id: "zoomOutBtn", labelFr: "🔍-", labelEn: "🔍-", labelEs: "🔍-", onclick: zoomOut},
+      {id: "recenterBtn", labelFr: "🏠 Accueil", labelEn: "🏠 Home", labelEs: "🏠 Inicio", onclick: fitToView}
+    ];
+    
+    buttons.forEach(btn=>{
+      const button=document.createElement("button");
+      button.id=btn.id;
+      button.dataset.labelFr=btn.labelFr;
+      button.dataset.labelEn=btn.labelEn;
+      button.dataset.labelEs=btn.labelEs;
+      
+      const currentLang=window.currentLang || "fr";
+      const langKey="label"+currentLang.toUpperCase();
+      button.textContent=button.dataset[langKey] || btn.labelFr;
+      
+      button.style.cssText=`
+        padding: 6px 10px;
+        background: white;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 11px;
+        font-family: 'DM Sans', sans-serif;
+        white-space: nowrap;
+      `;
+      button.onmouseover=()=>button.style.background="#f5f5f5";
+      button.onmouseout=()=>button.style.background="white";
+      button.onclick=btn.onclick;
+      controlsTop.appendChild(button);
+    });
+    
+    container.appendChild(controlsTop);
+  }
   
+  // Hook changement langue
   const origSetLang=window.setLang;
   window.setLang=function(lang){
     if(origSetLang) origSetLang(lang);
@@ -235,16 +277,27 @@ function addControls(){
 }
 
 function updateControlsLanguage(lang){
-  const controls=document.getElementById("tree-controls");
-  if(!controls) return;
+  const langKey="label"+lang.toUpperCase();
   
-  const buttons=controls.querySelectorAll("button");
-  buttons.forEach(btn=>{
-    const key="label"+lang.toUpperCase();
-    if(btn.dataset[key]){
-      btn.textContent=btn.dataset[key];
-    }
-  });
+  // Boutons bas
+  const controlsBottom=document.getElementById("tree-controls-bottom");
+  if(controlsBottom){
+    controlsBottom.querySelectorAll("button").forEach(btn=>{
+      if(btn.dataset[langKey]){
+        btn.textContent=btn.dataset[langKey];
+      }
+    });
+  }
+  
+  // Boutons haut
+  const controlsTop=document.getElementById("tree-controls-top");
+  if(controlsTop){
+    controlsTop.querySelectorAll("button").forEach(btn=>{
+      if(btn.dataset[langKey]){
+        btn.textContent=btn.dataset[langKey];
+      }
+    });
+  }
 }
 
 firebase.auth().onAuthStateChanged(async user=>{
@@ -440,9 +493,9 @@ function drawTree(P){
   _svg.call(_zoom);
   _svg.call(_zoom.transform, d3.zoomIdentity.translate(_W/2,40));
   
-  // Drag rectangle pour multi-sélection
+  // Drag rectangle sur SVG (pas sur _g !)
   _svg.on("mousedown", function(event){
-    if(event.target !== this) return;
+    if(event.target.tagName!=="svg" && event.target.tagName!=="g") return;
     rectSelectMode=true;
     rectX0=event.clientX;
     rectY0=event.clientY;
@@ -463,6 +516,7 @@ function drawTree(P){
       .attr("fill", "rgba(0,113,227,0.1)")
       .attr("stroke", "#0071e3")
       .attr("stroke-dasharray", "5,5")
+      .attr("stroke-width", 2)
       .attr("pointer-events", "none");
   });
   
@@ -476,9 +530,21 @@ function drawTree(P){
     const x1=Math.max(rectX0, event.clientX);
     const y1=Math.max(rectY0, event.clientY);
     
-    // Trouver nœuds dans le rectangle
+    // Coordonnées SVG viewport
+    const svgRect=_svg.node().getBoundingClientRect();
+    const svgX0=x0-svgRect.left;
+    const svgY0=y0-svgRect.top;
+    const svgX1=x1-svgRect.left;
+    const svgY1=y1-svgRect.top;
+    
+    // Chercher nœuds dans rectangle
     Object.entries(_pos).forEach(([id, pt])=>{
-      if(pt.x+_W/2>=x0 && pt.x+NW+_W/2<=x1 && pt.y+40>=y0 && pt.y+NH+40<=y1){
+      const nodeX=pt.x+_W/2;
+      const nodeY=pt.y+40;
+      const nodeX2=nodeX+NW;
+      const nodeY2=nodeY+NH;
+      
+      if(nodeX<svgX1 && nodeX2>svgX0 && nodeY<svgY1 && nodeY2>svgY0){
         _selectedIds.add(id);
       }
     });
@@ -628,7 +694,7 @@ function redrawAllNodes(){
       .attr("data-id",id)
       .style("cursor","grab")
       .on("mousedown", (event)=>{
-        if(!event.ctrlKey && !event.metaKey) clearSelection();
+        if(!event.ctrlKey && !event.metaKey && !event.shiftKey) clearSelection();
         toggleNodeSelection(id);
         onNodeMouseDown(event);
       })
@@ -714,8 +780,19 @@ document.addEventListener("mousemove", function(event){
   const deltaX=currentX-dragStartX;
   const deltaY=currentY-dragStartY;
   
-  _pos[draggedId].x+=deltaX;
-  _pos[draggedId].y+=deltaY;
+  // Drag TOUS les sélectionnés
+  _selectedIds.forEach(id=>{
+    if(_pos[id]){
+      _pos[id].x+=deltaX;
+      _pos[id].y+=deltaY;
+    }
+  });
+  
+  // Aussi drag l'ID actuellement traîné (s'il n'est pas dans _selectedIds)
+  if(_pos[draggedId]){
+    _pos[draggedId].x+=deltaX;
+    _pos[draggedId].y+=deltaY;
+  }
   
   dragStartX=currentX;
   dragStartY=currentY;
