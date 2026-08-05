@@ -1,16 +1,17 @@
-// ARBRE GÉNÉALOGIQUE v4.2.1 — COULEURS PAR MARIAGE (SIMPLE)
-// - Reprend v4.2 complet
-// - Ajoute couleurs par mariage aux lignes
-// - Pas de badges, pas de changement de placement
+// ARBRE GÉNÉALOGIQUE v4.2.2 — ZOOM, RECENTER, MULTI-SÉLECTION
+// - Fix langue espagnol
+// - Boutons Zoom +/-
+// - Recenter sur personne (ou fit-to-view)
+// - Multi-sélection par rectangle
 
-const TREE_VERSION = "4.2.1";
+const TREE_VERSION = "4.2.2";
 
 const MARRIAGE_COLORS = [
-  "#FF6B6B", // M1 - Rouge
-  "#4ECDC4", // M2 - Teal
-  "#95E1D3", // M3 - Menthe
-  "#FFE66D", // M4 - Jaune
-  "#A8E6CF"  // M5 - Vert clair
+  "#FF6B6B",
+  "#4ECDC4",
+  "#95E1D3",
+  "#FFE66D",
+  "#A8E6CF"
 ];
 
 function v(x){ return x&&typeof x==="string"&&x.trim()?x:null; }
@@ -35,9 +36,12 @@ let _P={};
 let _pos={};
 let _fams={};
 let _spouseOf={};
+let _selectedIds=new Set(); // Nœuds sélectionnés
 
 let draggedId=null;
 let dragStartX=0, dragStartY=0;
+let rectSelectMode=false;
+let rectX0, rectY0;
 
 window.treeResetView = function() {
   if (_svg && _zoom) {
@@ -109,6 +113,63 @@ function resetPositions(){
   }
 }
 
+function zoomIn(){
+  if(!_svg || !_zoom) return;
+  _svg.transition().duration(300)
+    .call(_zoom.scaleBy, 1.5);
+}
+
+function zoomOut(){
+  if(!_svg || !_zoom) return;
+  _svg.transition().duration(300)
+    .call(_zoom.scaleBy, 0.67);
+}
+
+function fitToView(){
+  if(!_svg || !_zoom || Object.keys(_pos).length===0) return;
+  
+  const poses=Object.values(_pos);
+  const xs=poses.map(p=>p.x);
+  const ys=poses.map(p=>p.y);
+  const minX=Math.min(...xs), maxX=Math.max(...xs)+NW;
+  const minY=Math.min(...ys), maxY=Math.max(...ys)+NH;
+  
+  const w=maxX-minX+40, h=maxY-minY+40;
+  const scale=Math.min(_W/w, _H/h, 1);
+  const tx=_W/2 - (minX+w/2)*scale;
+  const ty=40 - (minY+h/2)*scale + _H/2;
+  
+  _svg.transition().duration(500)
+    .call(_zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+}
+
+function recenterOnSelected(){
+  if(_selectedIds.size===1){
+    const id=Array.from(_selectedIds)[0];
+    const pt=_pos[id];
+    if(!pt) return;
+    
+    _svg.transition().duration(500)
+      .call(_zoom.transform, d3.zoomIdentity.translate(_W/2-pt.x, _H/2-pt.y));
+  }else{
+    fitToView();
+  }
+}
+
+function toggleNodeSelection(id){
+  if(_selectedIds.has(id)){
+    _selectedIds.delete(id);
+  }else{
+    _selectedIds.add(id);
+  }
+  redrawAllNodes();
+}
+
+function clearSelection(){
+  _selectedIds.clear();
+  redrawAllNodes();
+}
+
 function addControls(){
   const container=document.getElementById("tree-container");
   if(container.querySelector("#tree-controls")) return;
@@ -130,9 +191,12 @@ function addControls(){
   `;
   
   const buttons=[
-    {id: "resetBtn", labelFr: "🔄 Réinitialiser", labelEn: "🔄 Reset", onclick: resetPositions},
-    {id: "saveBtn", labelFr: "💾 Exporter", labelEn: "💾 Save", onclick: exportPositions},
-    {id: "loadBtn", labelFr: "📂 Importer", labelEn: "📂 Load", onclick: importPositions}
+    {id: "zoomInBtn", labelFr: "🔍+", labelEn: "🔍+", labelEs: "🔍+", onclick: zoomIn},
+    {id: "zoomOutBtn", labelFr: "🔍-", labelEn: "🔍-", labelEs: "🔍-", onclick: zoomOut},
+    {id: "recenterBtn", labelFr: "🎯 Centrer", labelEn: "🎯 Center", labelEs: "🎯 Centrar", onclick: recenterOnSelected},
+    {id: "resetBtn", labelFr: "🔄 Réinitialiser", labelEn: "🔄 Reset", labelEs: "🔄 Reiniciar", onclick: resetPositions},
+    {id: "saveBtn", labelFr: "💾 Exporter", labelEn: "💾 Save", labelEs: "💾 Guardar", onclick: exportPositions},
+    {id: "loadBtn", labelFr: "📂 Importer", labelEn: "📂 Load", labelEs: "📂 Cargar", onclick: importPositions}
   ];
   
   buttons.forEach(btn=>{
@@ -140,9 +204,10 @@ function addControls(){
     button.id=btn.id;
     button.dataset.labelFr=btn.labelFr;
     button.dataset.labelEn=btn.labelEn;
+    button.dataset.labelEs=btn.labelEs;
     
     const currentLang=window.currentLang || "fr";
-    button.textContent=currentLang==="fr" ? btn.labelFr : btn.labelEn;
+    button.textContent=button.dataset["label"+currentLang.toUpperCase()] || btn.labelFr;
     
     button.style.cssText=`
       padding: 6px 10px;
@@ -175,8 +240,10 @@ function updateControlsLanguage(lang){
   
   const buttons=controls.querySelectorAll("button");
   buttons.forEach(btn=>{
-    const key=lang==="fr" ? "labelFr" : "labelEn";
-    btn.textContent=btn.dataset[key] || btn.textContent;
+    const key="label"+lang.toUpperCase();
+    if(btn.dataset[key]){
+      btn.textContent=btn.dataset[key];
+    }
   });
 }
 
@@ -372,12 +439,57 @@ function drawTree(P){
   _zoom=d3.zoom().scaleExtent([0.1,3]).on("zoom",e=>_g.attr("transform",e.transform));
   _svg.call(_zoom);
   _svg.call(_zoom.transform, d3.zoomIdentity.translate(_W/2,40));
+  
+  // Drag rectangle pour multi-sélection
+  _svg.on("mousedown", function(event){
+    if(event.target !== this) return;
+    rectSelectMode=true;
+    rectX0=event.clientX;
+    rectY0=event.clientY;
+  });
+  
+  document.addEventListener("mousemove", function(event){
+    if(!rectSelectMode) return;
+    const x0=Math.min(rectX0, event.clientX);
+    const y0=Math.min(rectY0, event.clientY);
+    const x1=Math.max(rectX0, event.clientX);
+    const y1=Math.max(rectY0, event.clientY);
+    
+    d3.selectAll(".rect-select").remove();
+    _svg.append("rect")
+      .attr("class", "rect-select")
+      .attr("x", x0).attr("y", y0)
+      .attr("width", x1-x0).attr("height", y1-y0)
+      .attr("fill", "rgba(0,113,227,0.1)")
+      .attr("stroke", "#0071e3")
+      .attr("stroke-dasharray", "5,5")
+      .attr("pointer-events", "none");
+  });
+  
+  document.addEventListener("mouseup", function(event){
+    if(!rectSelectMode) return;
+    rectSelectMode=false;
+    d3.selectAll(".rect-select").remove();
+    
+    const x0=Math.min(rectX0, event.clientX);
+    const y0=Math.min(rectY0, event.clientY);
+    const x1=Math.max(rectX0, event.clientX);
+    const y1=Math.max(rectY0, event.clientY);
+    
+    // Trouver nœuds dans le rectangle
+    Object.entries(_pos).forEach(([id, pt])=>{
+      if(pt.x+_W/2>=x0 && pt.x+NW+_W/2<=x1 && pt.y+40>=y0 && pt.y+NH+40<=y1){
+        _selectedIds.add(id);
+      }
+    });
+    
+    redrawAllNodes();
+  });
 
   redrawAllLines();
   redrawAllNodes();
 }
 
-// Récupérer numéro mariage pour un enfant
 function getMarriageNumber(childId){
   if(!_P[childId]) return 0;
   const child=_P[childId];
@@ -385,7 +497,6 @@ function getMarriageNumber(childId){
   
   if(!fid && !mid) return 0;
   
-  // Chercher le numéro dans les spouses du père ou de la mère
   const parentId = fid || mid;
   const parent = _P[parentId];
   if(!parent || !parent.spouses) return 0;
@@ -406,7 +517,6 @@ function redrawAllLines(){
 
   const ids=Object.keys(_P);
   
-  // Lignes conjoints
   const spDone=new Set();
   ids.forEach(id=>{
     const p=_P[id];
@@ -446,7 +556,6 @@ function redrawAllLines(){
     });
   });
 
-  // Lignes parent-enfant
   Object.values(_fams).forEach(({fid,mid,ch})=>{
     const pf=fid?_pos[fid]:null, pm=mid?_pos[mid]:null;
     if(!pf&&!pm) return;
@@ -493,7 +602,6 @@ function redrawAllLines(){
         .attr("x1",mxX).attr("y1",jY).attr("x2",jX).attr("y2",jY);
     }
     
-    // Lignes verticales colorées par mariage
     cps.forEach((cp, cIdx)=>{
       const childIdx=getMarriageNumber(ch[cIdx]);
       const color=MARRIAGE_COLORS[childIdx % MARRIAGE_COLORS.length];
@@ -513,18 +621,30 @@ function redrawAllNodes(){
     const p=_P[id], pt=_pos[id]; 
     if(!pt) return;
 
+    const isSelected=_selectedIds.has(id);
+
     const grp=_g.append("g")
       .attr("class","node")
       .attr("data-id",id)
       .style("cursor","grab")
-      .on("mousedown", onNodeMouseDown)
-      .on("click",()=>location.href="person.html?id="+id)
+      .on("mousedown", (event)=>{
+        if(!event.ctrlKey && !event.metaKey) clearSelection();
+        toggleNodeSelection(id);
+        onNodeMouseDown(event);
+      })
+      .on("click",()=>{location.href="person.html?id="+id})
       .on("mouseenter",function(){ d3.select(this).select("rect").attr("stroke","#0071e3").attr("stroke-width",2); })
-      .on("mouseleave",function(){ if(!draggedId) d3.select(this).select("rect").attr("stroke",p.dd?"#c8c8cc":"#d1d1d6").attr("stroke-width",1.5); });
+      .on("mouseleave",function(){ 
+        const borderColor=isSelected ? "#0071e3" : (p.dd?"#c8c8cc":"#d1d1d6");
+        const width=isSelected ? 2 : 1.5;
+        if(!draggedId) d3.select(this).select("rect").attr("stroke",borderColor).attr("stroke-width",width); 
+      });
 
     grp.append("rect")
       .attr("x",pt.x).attr("y",pt.y).attr("width",NW).attr("height",NH).attr("rx",10)
-      .attr("fill",p.dd?"#f2f2f4":"white").attr("stroke",p.dd?"#c8c8cc":"#d1d1d6").attr("stroke-width",1.5);
+      .attr("fill",p.dd?"#f2f2f4":"white")
+      .attr("stroke",isSelected ? "#0071e3" : (p.dd?"#c8c8cc":"#d1d1d6"))
+      .attr("stroke-width",isSelected ? 2 : 1.5);
 
     const cx=pt.x+NW/2;
 
