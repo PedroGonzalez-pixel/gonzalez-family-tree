@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin - Arbre Gonzalez</title>
+  
+  <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-firestore.js"></script>
+  
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #f5f5f7;
+      color: #1d1d1f;
+    }
+    
+    header {
+      background: white;
+      padding: 16px 24px;
+      border-bottom: 1px solid #d1d1d6;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    
+    header h1 {
+      font-size: 24px;
+      font-weight: 600;
+    }
+    
+    .header-right {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    
+    button {
+      padding: 8px 16px;
+      background: #0071e3;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+    
+    button:hover {
+      background: #0056b3;
+    }
+    
+    button.secondary {
+      background: #f0f0f0;
+      color: #1d1d1f;
+      border: 1px solid #d1d1d6;
+    }
+    
+    button.secondary:hover {
+      background: #e8e8e8;
+    }
+    
+    button.danger {
+      background: #ff3b30;
+    }
+    
+    button.danger:hover {
+      background: #cc2f26;
+    }
+    
+    main {
+      max-width: 1200px;
+      margin: 24px auto;
+      padding: 0 24px;
+    }
+    
+    .tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid #d1d1d6;
+      margin-bottom: 24px;
+      background: white;
+      border-radius: 8px 8px 0 0;
+    }
+    
+    .tab {
+      padding: 12px 20px;
+      background: white;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      color: #6e6e73;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+    }
+    
+    .tab.active {
+      color: #0071e3;
+      border-bottom-color: #0071e3;
+    }
+    
+    .tab-content {
+      display: none;
+      background: white;
+      padding: 24px;
+      border-radius: 0 0 8px 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    .tab-content.active {
+      display: block;
+    }
+    
+    .form-group {
+      margin-bottom: 20px;
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 500;
+      font-size: 13px;
+      color: #6e6e73;
+    }
+    
+    input, select {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #d1d1d6;
+      border-radius: 4px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px;
+    }
+    
+    input:focus, select:focus {
+      outline: none;
+      border-color: #0071e3;
+      box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.1);
+    }
+    
+    .form-row {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 12px;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    
+    thead {
+      background: #f5f5f7;
+      border-bottom: 1px solid #d1d1d6;
+    }
+    
+    th, td {
+      padding: 12px;
+      text-align: left;
+      font-size: 13px;
+      border-bottom: 1px solid #e8e8e8;
+    }
+    
+    th {
+      font-weight: 600;
+      color: #6e6e73;
+    }
+    
+    tr:hover {
+      background: #f9f9fa;
+    }
+    
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    
+    .badge.admin {
+      background: #ffe5e5;
+      color: #a00;
+    }
+    
+    .badge.reader {
+      background: #e5f3ff;
+      color: #00a;
+    }
+    
+    .badge.pending {
+      background: #fff3e5;
+      color: #a60;
+    }
+    
+    .badge.resolved {
+      background: #e5f3e5;
+      color: #0a0;
+    }
+    
+    .actions {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .actions button {
+      padding: 6px 12px;
+      font-size: 12px;
+    }
+    
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: #6e6e73;
+    }
+    
+    .empty-state p {
+      margin-bottom: 16px;
+    }
+    
+    dialog {
+      border: 1px solid #d1d1d6;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      padding: 24px;
+    }
+    
+    dialog::backdrop {
+      background: rgba(0,0,0,0.5);
+    }
+    
+    .alert {
+      padding: 12px 16px;
+      border-radius: 4px;
+      margin-bottom: 16px;
+      font-size: 13px;
+    }
+    
+    .alert.success {
+      background: #e5f3e5;
+      color: #0a0;
+      border: 1px solid #a5d6a7;
+    }
+    
+    .alert.error {
+      background: #ffe5e5;
+      color: #a00;
+      border: 1px solid #ef5350;
+    }
+    
+    #loadingMsg {
+      text-align: center;
+      padding: 40px;
+    }
+    
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 2px solid #d1d1d6;
+      border-top: 2px solid #0071e3;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🔐 Administration - Arbre Gonzalez</h1>
+  <div class="header-right">
+    <span id="userEmail" style="color: #6e6e73; font-size: 13px;"></span>
+    <button class="secondary" onclick="logout()">Déconnexion</button>
+  </div>
+</header>
+
+<main id="mainContent" style="display:none;">
+  
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('access')">👥 Accès (Lecteurs)</button>
+    <button class="tab" onclick="switchTab('comments')">💬 Commentaires</button>
+    <button class="tab" onclick="switchTab('tree-info')">ℹ️ Infos Arbre</button>
+  </div>
+  
+  <!-- TAB 1: ACCÈS -->
+  <div class="tab-content active" id="access">
+    <h2>Gestion des Accès</h2>
+    
+    <div style="background: #e5f3ff; border: 1px solid #4ECDC4; border-radius: 4px; padding: 12px; margin-bottom: 20px; font-size: 13px;">
+      <strong>💡 Astuce :</strong> Ajoutez des lecteurs en entrant leur email Gmail. Ils verront l'arbre et pourront ajouter des commentaires.
+    </div>
+    
+    <div class="form-group">
+      <h3>Ajouter un nouveau lecteur</h3>
+      <div class="form-row">
+        <input type="email" id="newUserEmail" placeholder="Email (ex: marie@gmail.com)">
+        <button onclick="addAccess()">Ajouter</button>
+      </div>
+      <div id="addAccessMsg"></div>
+    </div>
+    
+    <hr style="margin: 24px 0; border: none; border-top: 1px solid #d1d1d6;">
+    
+    <h3>Lecteurs actuels</h3>
+    <div id="accessList"></div>
+  </div>
+  
+  <!-- TAB 2: COMMENTAIRES -->
+  <div class="tab-content" id="comments">
+    <h2>Gestion des Commentaires</h2>
+    
+    <div style="background: #fff3e5; border: 1px solid #FFE66D; border-radius: 4px; padding: 12px; margin-bottom: 20px; font-size: 13px;">
+      <strong>📝 Info :</strong> Les lecteurs peuvent laisser des commentaires en cliquant droit sur une personne. Marquez-les comme résolus quand vous avez traité le problème.
+    </div>
+    
+    <div style="margin-bottom: 16px;">
+      <button class="secondary" onclick="filterComments('ALL')">Tous</button>
+      <button class="secondary" onclick="filterComments('PENDING')">En attente</button>
+      <button class="secondary" onclick="filterComments('RESOLVED')">Résolus</button>
+    </div>
+    
+    <div id="commentsList"></div>
+  </div>
+  
+  <!-- TAB 3: INFOS ARBRE -->
+  <div class="tab-content" id="tree-info">
+    <h2>Informations de l'Arbre</h2>
+    
+    <div style="background: #f5f5f7; border: 1px solid #d1d1d6; border-radius: 4px; padding: 16px;">
+      <p><strong>Nom :</strong> <span id="treeName">Chargement...</span></p>
+      <p><strong>ID :</strong> <code id="treeId" style="background: #fff; padding: 4px 8px; border-radius: 4px;">gonzalez-tree</code></p>
+      <p><strong>Créé le :</strong> <span id="treeCreatedAt">Chargement...</span></p>
+      <p><strong>Propriétaire :</strong> <span id="treeOwner">Vous</span></p>
+      
+      <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #d1d1d6;">
+        <h3>Lien de partage</h3>
+        <p style="font-size: 13px; color: #6e6e73; margin-bottom: 8px;">Donnez ce lien aux personnes pour accéder à l'arbre :</p>
+        <input type="text" id="shareLink" readonly style="background: #f5f5f7;">
+        <button class="secondary" onclick="copyShareLink()" style="margin-top: 8px;">📋 Copier le lien</button>
+      </div>
+    </div>
+  </div>
+  
+</main>
+
+<div id="loadingMsg" style="text-align: center; padding: 40px;">
+  <div class="loading" style="margin: 0 auto 16px;"></div>
+  <p>Chargement...</p>
+</div>
+
+<script src="config.js"></script>
+<script src="js/admin.js"></script>
+
+</body>
+</html>
