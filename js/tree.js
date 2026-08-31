@@ -214,13 +214,13 @@ function addControls(){
     container.appendChild(controlsBottom);
   }
   
-  // Boutons HAUT DROITE
+  // Boutons BAS DROITE
   if(!container.querySelector("#tree-controls-top")){
     const controlsTop=document.createElement("div");
     controlsTop.id="tree-controls-top";
     controlsTop.style.cssText=`
       position: absolute;
-      top: 10px;
+      bottom: 10px;
       right: 10px;
       z-index: 100;
       display: flex;
