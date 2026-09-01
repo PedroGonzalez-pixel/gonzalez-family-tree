@@ -238,6 +238,7 @@
             border: 1px solid #d5d5d7;
             border-radius: 8px;
             font-size: 14px;
+            font-family: inherit;
         }
 
         input[type="email"]:focus,
@@ -246,6 +247,12 @@
             outline: none;
             border-color: #0071e3;
             box-shadow: 0 0 0 2px rgba(0, 113, 227, 0.1);
+        }
+
+        input[type="text"]:disabled {
+            background: #f5f5f7;
+            color: #999;
+            cursor: not-allowed;
         }
 
         .btn {
@@ -265,6 +272,15 @@
 
         .btn-primary:hover {
             background: #0061d5;
+        }
+
+        .btn-secondary {
+            background: #e5e5e7;
+            color: #1d1d1f;
+        }
+
+        .btn-secondary:hover {
+            background: #d5d5d7;
         }
 
         .btn-danger {
@@ -304,16 +320,6 @@
             font-size: 12px;
             color: #666;
             margin-top: 2px;
-        }
-
-        .account-role {
-            background: white;
-            border: 1px solid #d5d5d7;
-            padding: 6px 12px;
-            border-radius: 6px;
-            font-size: 12px;
-            margin: 0 8px;
-            min-width: 80px;
         }
 
         .account-actions {
@@ -372,6 +378,12 @@
             padding: 24px;
             color: #666;
         }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
     </style>
 </head>
 <body>
@@ -424,43 +436,6 @@
         </div>
     </div>
 
-    <!-- MODAL EDIT USER -->
-    <div class="modal" id="editModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 data-i18n="editUser">Modifier un compte</h2>
-                <button class="btn-close" onclick="closeEdit()">✕</button>
-            </div>
-            <div class="modal-section">
-                <div class="form-group">
-                    <div style="flex: 1;">
-                        <label style="display: block; font-size: 12px; margin-bottom: 8px; color: #666;">Email</label>
-                        <input type="text" id="editEmail" readonly style="background: #f5f5f7; color: #999;">
-                    </div>
-                </div>
-                <div class="form-group">
-                    <div style="flex: 1;">
-                        <label style="display: block; font-size: 12px; margin-bottom: 8px; color: #666;" data-i18n="firstName">Prénom</label>
-                        <input type="text" id="editName">
-                    </div>
-                </div>
-                <div class="form-group">
-                    <div style="flex: 1;">
-                        <label style="display: block; font-size: 12px; margin-bottom: 8px; color: #666;" data-i18n="role">Rôle</label>
-                        <select id="editRole">
-                            <option value="reader" data-i18n="roleReader">Lecteur</option>
-                            <option value="admin" data-i18n="roleAdmin">Admin</option>
-                        </select>
-                    </div>
-                </div>
-                <div style="display: flex; gap: 8px;">
-                    <button class="btn btn-primary" onclick="saveEdit()">Sauvegarder</button>
-                    <button class="btn" style="background: #e5e5e7; color: #1d1d1f;" onclick="closeEdit()">Annuler</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- MODAL SETTINGS -->
     <div class="modal" id="settingsModal">
         <div class="modal-content">
@@ -475,11 +450,11 @@
             <div class="modal-section">
                 <h3 data-i18n="addUser">Ajouter un compte</h3>
                 <div class="form-group">
-                    <input type="email" id="newEmail" placeholder="Email" data-placeholder="email">
-                    <input type="text" id="newName" placeholder="Prénom" data-placeholder="firstName">
+                    <input type="email" id="newEmail" placeholder="Email">
+                    <input type="text" id="newName" placeholder="Prénom">
                     <select id="newRole">
-                        <option value="reader" data-i18n="roleReader">Lecteur</option>
-                        <option value="admin" data-i18n="roleAdmin">Admin</option>
+                        <option value="reader">Lecteur</option>
+                        <option value="admin">Admin</option>
                     </select>
                     <button class="btn btn-primary" onclick="addUser()">+</button>
                 </div>
@@ -488,7 +463,41 @@
             <!-- LISTE DES COMPTES -->
             <div class="modal-section">
                 <h3 data-i18n="users">Utilisateurs</h3>
-                <div id="accountsList" class="loading" data-i18n="loading">Chargement...</div>
+                <div id="accountsList" class="loading">Chargement...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL EDIT USER -->
+    <div class="modal" id="editModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 data-i18n="editUser">Modifier un compte</h2>
+                <button class="btn-close" onclick="closeEdit()">✕</button>
+            </div>
+
+            <div class="modal-section">
+                <div class="form-row">
+                    <div>
+                        <label style="display: block; font-size: 12px; margin-bottom: 8px; color: #666;">Email</label>
+                        <input type="text" id="editEmail" disabled>
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; margin-bottom: 8px; color: #666;" data-i18n="firstName">Prénom</label>
+                        <input type="text" id="editName">
+                    </div>
+                </div>
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; font-size: 12px; margin-bottom: 8px; color: #666;" data-i18n="role">Rôle</label>
+                    <select id="editRole">
+                        <option value="reader">Lecteur</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-primary" onclick="saveEdit()">Sauvegarder</button>
+                    <button class="btn btn-secondary" onclick="closeEdit()">Annuler</button>
+                </div>
             </div>
         </div>
     </div>
@@ -499,100 +508,46 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
     <script src="config.js"></script>
 
-    <!-- MULTILINGUE -->
     <script>
         const i18n = {
             fr: {
-                welcome: "Bienvenue",
-                welcomeSub: "Que souhaitez-vous explorer ?",
-                tree: "Arbre Généalogique",
-                treeSub: "Visualisez l'arbre généalogique",
-                gallery: "Galerie",
-                gallerySub: "Photos de famille",
-                timeline: "Timeline",
-                timelineSub: "Chronologie des événements",
-                add: "Ajouter une personne",
-                addSub: "Enrichir l'arbre familial",
-                logout: "Déconnexion",
-                settings: "Paramètres",
-                addUser: "Ajouter un compte",
-                users: "Utilisateurs",
-                loading: "Chargement...",
-                email: "Email",
-                firstName: "Prénom",
-                role: "Rôle",
-                roleReader: "Lecteur",
-                roleAdmin: "Admin",
-                delete: "Supprimer",
-                edit: "Modifier",
-                editUser: "Modifier un compte",
-                save: "Sauvegarder",
-                cancel: "Annuler",
-                success: "Opération réussie",
-                error: "Erreur"
+                welcome: "Bienvenue", welcomeSub: "Que souhaitez-vous explorer ?",
+                tree: "Arbre Généalogique", treeSub: "Visualisez l'arbre généalogique",
+                gallery: "Galerie", gallerySub: "Photos de famille",
+                timeline: "Timeline", timelineSub: "Chronologie des événements",
+                add: "Ajouter une personne", addSub: "Enrichir l'arbre familial",
+                logout: "Déconnexion", settings: "Paramètres", addUser: "Ajouter un compte",
+                users: "Utilisateurs", loading: "Chargement...", firstName: "Prénom",
+                role: "Rôle", delete: "Supprimer", edit: "Modifier", editUser: "Modifier un compte",
+                success: "Opération réussie", error: "Erreur"
             },
             en: {
-                welcome: "Welcome",
-                welcomeSub: "What would you like to explore?",
-                tree: "Family Tree",
-                treeSub: "Visualize the family tree",
-                gallery: "Gallery",
-                gallerySub: "Family photos",
-                timeline: "Timeline",
-                timelineSub: "Timeline of events",
-                add: "Add a person",
-                addSub: "Enrich the family tree",
-                logout: "Sign out",
-                settings: "Settings",
-                addUser: "Add account",
-                users: "Users",
-                loading: "Loading...",
-                email: "Email",
-                firstName: "First name",
-                role: "Role",
-                roleReader: "Reader",
-                roleAdmin: "Admin",
-                delete: "Delete",
-                edit: "Edit",
-                editUser: "Edit account",
-                save: "Save",
-                cancel: "Cancel",
-                success: "Operation successful",
-                error: "Error"
+                welcome: "Welcome", welcomeSub: "What would you like to explore?",
+                tree: "Family Tree", treeSub: "Visualize the family tree",
+                gallery: "Gallery", gallerySub: "Family photos",
+                timeline: "Timeline", timelineSub: "Timeline of events",
+                add: "Add a person", addSub: "Enrich the family tree",
+                logout: "Sign out", settings: "Settings", addUser: "Add account",
+                users: "Users", loading: "Loading...", firstName: "First name",
+                role: "Role", delete: "Delete", edit: "Edit", editUser: "Edit account",
+                success: "Operation successful", error: "Error"
             },
             es: {
-                welcome: "Bienvenido",
-                welcomeSub: "¿Qué desea explorar?",
-                tree: "Árbol Genealógico",
-                treeSub: "Visualiza el árbol genealógico",
-                gallery: "Galería",
-                gallerySub: "Fotos de familia",
-                timeline: "Línea de Tiempo",
-                timelineSub: "Cronología de eventos",
-                add: "Añadir una persona",
-                addSub: "Enriquecer el árbol familiar",
-                logout: "Cerrar sesión",
-                settings: "Configuración",
-                addUser: "Añadir cuenta",
-                users: "Usuarios",
-                loading: "Cargando...",
-                email: "Correo",
-                firstName: "Nombre",
-                role: "Rol",
-                roleReader: "Lector",
-                roleAdmin: "Admin",
-                delete: "Eliminar",
-                edit: "Editar",
-                editUser: "Editar cuenta",
-                save: "Guardar",
-                cancel: "Cancelar",
-                success: "Operación exitosa",
-                error: "Error"
+                welcome: "Bienvenido", welcomeSub: "¿Qué desea explorar?",
+                tree: "Árbol Genealógico", treeSub: "Visualiza el árbol genealógico",
+                gallery: "Galería", gallerySub: "Fotos de familia",
+                timeline: "Línea de Tiempo", timelineSub: "Cronología de eventos",
+                add: "Añadir una persona", addSub: "Enriquecer el árbol familiar",
+                logout: "Cerrar sesión", settings: "Configuración", addUser: "Añadir cuenta",
+                users: "Usuarios", loading: "Cargando...", firstName: "Nombre",
+                role: "Rol", delete: "Eliminar", edit: "Editar", editUser: "Editar cuenta",
+                success: "Operación exitosa", error: "Error"
             }
         };
 
         let currentLang = localStorage.getItem("lang") || "fr";
         let isAdmin = false;
+        let currentEditEmail = null;
 
         function setLang(lang) {
             currentLang = lang;
@@ -609,22 +564,16 @@
                 const key = el.getAttribute("data-i18n");
                 if (t[key]) el.textContent = t[key];
             });
-            document.querySelectorAll("[data-placeholder]").forEach(el => {
-                const key = el.getAttribute("data-placeholder");
-                if (t[key]) el.placeholder = t[key];
-            });
         }
 
         setLang(currentLang);
 
-        // AUTH
         firebase.auth().onAuthStateChanged(async (user) => {
             if (!user) {
                 window.location.href = 'index.html';
                 return;
             }
 
-            // Vérifier si admin
             try {
                 const doc = await db.collection('authorizedUsers').doc(user.email).get();
                 if (doc.exists && doc.data().role === 'admin') {
@@ -642,7 +591,6 @@
             });
         }
 
-        // SETTINGS MODAL
         function openSettings() {
             document.getElementById('settingsModal').classList.add('active');
             loadUsers();
@@ -654,8 +602,7 @@
 
         async function loadUsers() {
             const list = document.getElementById('accountsList');
-            list.innerHTML = '<div class="loading" data-i18n="loading">Chargement...</div>';
-            applyTranslations();
+            list.innerHTML = '<div class="loading">Chargement...</div>';
 
             try {
                 const snapshot = await db.collection('authorizedUsers').get();
@@ -677,22 +624,17 @@
                                 <div class="account-email">${email}</div>
                                 <div class="account-name">${firstName}</div>
                             </div>
-                            <select class="account-role" onchange="updateRole('${email}', this.value)">
-                                <option value="reader" ${role === 'reader' ? 'selected' : ''}>Lecteur</option>
-                                <option value="admin" ${role === 'admin' ? 'selected' : ''}>Admin</option>
-                            </select>
                             <div class="account-actions">
-                                <button class="btn-sm btn-sm-primary" onclick="openEdit('${email}', '${firstName}', '${role}')" data-i18n="edit">Modifier</button>
-                                <button class="btn-sm btn-sm-danger" onclick="deleteUser('${email}')" data-i18n="delete">Supprimer</button>
+                                <button class="btn-sm btn-sm-primary" onclick="openEdit('${email}', '${firstName}', '${role}')">Modifier</button>
+                                <button class="btn-sm btn-sm-danger" onclick="deleteUser('${email}')">Supprimer</button>
                             </div>
                         </div>
                     `;
                 });
                 html += '</div>';
                 list.innerHTML = html;
-                applyTranslations();
             } catch (err) {
-                showMessage('error', 'Erreur: ' + err.message);
+                list.innerHTML = `<div class="message error">Erreur: ${err.message}</div>`;
             }
         }
 
@@ -720,13 +662,38 @@
             }
         }
 
-        async function updateRole(email, newRole) {
+        function openEdit(email, firstName, role) {
+            currentEditEmail = email;
+            document.getElementById('editEmail').value = email;
+            document.getElementById('editName').value = firstName;
+            document.getElementById('editRole').value = role;
+            document.getElementById('editModal').classList.add('active');
+        }
+
+        function closeEdit() {
+            document.getElementById('editModal').classList.remove('active');
+            currentEditEmail = null;
+        }
+
+        async function saveEdit() {
+            const firstName = document.getElementById('editName').value.trim();
+            const role = document.getElementById('editRole').value;
+
+            if (!firstName) {
+                alert('Le prénom ne peut pas être vide');
+                return;
+            }
+
             try {
-                await db.collection('authorizedUsers').doc(email).update({ role: newRole });
+                await db.collection('authorizedUsers').doc(currentEditEmail).update({
+                    firstName: firstName,
+                    role: role
+                });
                 showMessage('success', i18n[currentLang].success);
+                closeEdit();
                 loadUsers();
             } catch (err) {
-                showMessage('error', 'Erreur: ' + err.message);
+                alert('Erreur: ' + err.message);
             }
         }
 
@@ -747,43 +714,6 @@
             msg.className = `message ${type}`;
             msg.textContent = text;
             setTimeout(() => msg.textContent = '', 3000);
-        }
-
-        let currentEditEmail = null;
-
-        function openEdit(email, firstName, role) {
-            currentEditEmail = email;
-            document.getElementById('editEmail').value = email;
-            document.getElementById('editName').value = firstName;
-            document.getElementById('editRole').value = role;
-            document.getElementById('editModal').classList.add('active');
-        }
-
-        function closeEdit() {
-            document.getElementById('editModal').classList.remove('active');
-            currentEditEmail = null;
-        }
-
-        async function saveEdit() {
-            const firstName = document.getElementById('editName').value.trim();
-            const role = document.getElementById('editRole').value;
-
-            if (!firstName) {
-                showMessage('error', 'Le prénom ne peut pas être vide');
-                return;
-            }
-
-            try {
-                await db.collection('authorizedUsers').doc(currentEditEmail).update({
-                    firstName: firstName,
-                    role: role
-                });
-                showMessage('success', i18n[currentLang].success);
-                closeEdit();
-                loadUsers();
-            } catch (err) {
-                showMessage('error', 'Erreur: ' + err.message);
-            }
         }
     </script>
 </body>
