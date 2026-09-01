@@ -3,45 +3,48 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Fiche Personne</title>
+  <title>Fiche Personne – Famille Gonzalez</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=Playfair+Display:wght@400;500&display=swap" rel="stylesheet">
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
       --bg: #f5f5f7;
       --surface: #ffffff;
+      --surface2: #f9f9fb;
       --border: #e0e0e5;
       --text: #1d1d1f;
       --muted: #6e6e73;
       --accent: #0071e3;
+      --accent-hover: #0077ed;
       --danger: #ff3b30;
       --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 2px 20px rgba(0,0,0,0.06);
     }
     body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 
+    /* TOPBAR */
     .topbar {
       position: sticky; top: 0; z-index: 100;
-      background: rgba(255,255,255,0.95);
+      background: rgba(255,255,255,0.85);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
       border-bottom: 1px solid var(--border);
       display: flex; align-items: center; justify-content: space-between;
       padding: 0 32px; height: 56px;
     }
-
     .topbar-left { display: flex; align-items: center; gap: 12px; }
-    .topbar h1 { font-size: 17px; font-weight: 500; }
-
+    .topbar h1 { font-family: 'Playfair Display', serif; font-size: 17px; font-weight: 500; }
     .btn-back {
       display: flex; align-items: center; gap: 6px;
       font-size: 14px; color: var(--accent); text-decoration: none;
-      padding: 6px 10px; border-radius: 8px; transition: background 0.15s;
-      cursor: pointer; border: none; background: transparent;
+      padding: 6px 10px; border-radius: var(--radius-sm); transition: background 0.15s;
     }
     .btn-back:hover { background: rgba(0,113,227,0.08); }
-
     .topbar-right { display: flex; align-items: center; gap: 12px; }
 
     .lang-switcher {
@@ -53,109 +56,113 @@
       font-size: 12px; font-weight: 500; cursor: pointer; color: var(--muted); transition: all 0.2s;
     }
     .lang-btn.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+    .btn-logout {
+      border: 1px solid var(--border); background: transparent;
+      padding: 6px 14px; border-radius: 20px; font-size: 13px;
+      color: var(--muted); cursor: pointer; transition: all 0.15s;
+    }
+    .btn-logout:hover { background: var(--bg); color: var(--text); }
 
-    main { max-width: 700px; margin: 40px auto; padding: 0 20px 80px; }
+    /* MAIN */
+    main { max-width: 680px; margin: 40px auto; padding: 0 20px 80px; }
 
+    /* HERO */
     .person-hero {
       background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--radius); padding: 32px; margin-bottom: 24px;
-      box-shadow: 0 2px 20px rgba(0,0,0,0.06);
-      display: flex; align-items: flex-start; gap: 24px;
+      border-radius: var(--radius); padding: 32px; margin-bottom: 16px;
+      box-shadow: var(--shadow);
+      display: flex; align-items: center; gap: 28px;
     }
-
-    .avatar { width: 100px; height: 100px; border-radius: 50%; background: var(--bg); border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 40px; flex-shrink: 0; }
-
-    .person-info h2 { font-size: 28px; font-weight: 600; margin-bottom: 8px; }
-    .person-dates { font-size: 14px; color: var(--muted); margin-bottom: 16px; }
-
-    .btn-action {
-      display: inline-flex; align-items: center; gap: 8px;
-      padding: 10px 16px; border-radius: 20px; font-size: 13px; font-weight: 600;
-      border: none; cursor: pointer; transition: all 0.3s;
-      margin-right: 8px; margin-bottom: 8px;
+    .avatar-large {
+      width: 100px; height: 100px; border-radius: 50%;
+      background: var(--bg); border: 2px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 36px; flex-shrink: 0;
+      background-size: cover; background-position: center; overflow: hidden;
     }
-
+    .person-identity { flex: 1; }
+    .person-identity h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 26px; font-weight: 500; line-height: 1.2; margin-bottom: 4px;
+    }
+    .person-nickname {
+      font-size: 14px; color: var(--muted); font-style: italic; margin-bottom: 8px;
+    }
+    .person-dates {
+      display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px;
+    }
+    .date-badge {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 13px; color: var(--muted);
+      background: var(--bg); border: 1px solid var(--border);
+      padding: 5px 12px; border-radius: 20px;
+    }
+    .date-badge span { font-weight: 500; color: var(--text); }
     .btn-edit {
-      background: var(--accent); color: white;
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--accent); color: white; border: none;
+      padding: 9px 20px; border-radius: 20px; font-size: 13px;
+      font-weight: 500; text-decoration: none; cursor: pointer;
+      transition: background 0.15s;
     }
-    .btn-edit:hover { background: #0061d5; }
-    .btn-edit:disabled {
-      background: #ccc; cursor: not-allowed; opacity: 0.6;
-    }
+    .btn-edit:hover { background: var(--accent-hover); }
 
-    .btn-comment {
-      background: #34C759; color: white;
-    }
-    .btn-comment:hover { background: #30B954; }
-
-    .card {
+    /* CARDS */
+    .info-card {
       background: var(--surface); border: 1px solid var(--border);
       border-radius: var(--radius); padding: 24px; margin-bottom: 16px;
-      box-shadow: 0 2px 20px rgba(0,0,0,0.06);
+      box-shadow: var(--shadow);
+    }
+    .info-card h3 {
+      font-size: 12px; font-weight: 500; text-transform: uppercase;
+      letter-spacing: 0.07em; color: var(--muted); margin-bottom: 20px;
     }
 
-    .card h3 {
-      font-size: 12px; font-weight: 600; text-transform: uppercase;
-      color: var(--muted); margin-bottom: 16px;
+    /* RELATIONS */
+    .relation-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
     }
+    .relation-item { display: flex; flex-direction: column; gap: 4px; }
+    .relation-label { font-size: 12px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
+    .relation-link {
+      font-size: 15px; color: var(--accent); text-decoration: none;
+      font-weight: 500; transition: opacity 0.15s;
+    }
+    .relation-link:hover { opacity: 0.7; }
+    .relation-empty { font-size: 15px; color: var(--muted); }
 
-    .info-row {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 12px 0; border-bottom: 1px solid var(--border);
+    /* ENFANTS */
+    .children-grid {
+      display: flex; flex-wrap: wrap; gap: 10px;
     }
-    .info-row:last-child { border-bottom: none; }
+    .child-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--bg); border: 1px solid var(--border);
+      padding: 7px 16px; border-radius: 20px;
+      font-size: 14px; color: var(--text); text-decoration: none;
+      transition: all 0.15s;
+    }
+    .child-pill:hover { background: var(--accent); color: white; border-color: var(--accent); }
 
-    .info-label { font-size: 13px; color: var(--muted); font-weight: 500; }
-    .info-value { font-size: 15px; color: var(--text); font-weight: 600; }
+    /* NOTES */
+    .notes-text {
+      font-size: 15px; line-height: 1.7; color: var(--text);
+      white-space: pre-wrap;
+    }
+    .notes-empty { font-size: 15px; color: var(--muted); font-style: italic; }
 
-    .comments-list {
-      display: flex; flex-direction: column; gap: 12px;
+    /* LOADING */
+    .loading {
+      display: flex; align-items: center; justify-content: center;
+      height: 200px; color: var(--muted); font-size: 15px;
     }
-
-    .comment-item {
-      background: #f9f9fb; border: 1px solid var(--border);
-      border-radius: 8px; padding: 16px;
-    }
-
-    .comment-author {
-      font-weight: 600; color: var(--text); font-size: 13px;
-    }
-    .comment-date {
-      font-size: 11px; color: var(--muted); margin-top: 2px;
-    }
-    .comment-text {
-      margin-top: 8px; font-size: 14px; color: var(--text); line-height: 1.5;
-    }
-
-    .form-group {
-      margin-bottom: 16px;
-    }
-    .form-label {
-      display: block; font-size: 13px; font-weight: 600; margin-bottom: 8px; color: var(--text);
-    }
-    textarea, input[type="text"] {
-      width: 100%; padding: 10px 12px; border: 1px solid var(--border);
-      border-radius: 8px; font-size: 14px; font-family: inherit;
-    }
-    textarea:focus, input[type="text"]:focus {
-      outline: none; border-color: var(--accent);
-      box-shadow: 0 0 0 2px rgba(0,113,227,0.1);
-    }
-
-    .btn-submit {
-      background: var(--accent); color: white;
-      padding: 10px 20px; border: none; border-radius: 8px;
-      cursor: pointer; font-size: 13px; font-weight: 600;
-      transition: background 0.3s;
-    }
-    .btn-submit:hover { background: #0061d5; }
-
-    .loading { text-align: center; padding: 40px; color: var(--muted); }
-    .empty { color: var(--muted); font-style: italic; }
 
     @media (max-width: 600px) {
-      main { margin: 20px auto; }
-      .person-hero { flex-direction: column; }
+      .person-hero { flex-direction: column; align-items: flex-start; }
+      .relation-grid { grid-template-columns: 1fr 1fr; }
+      main { margin: 24px auto; }
+      .topbar { padding: 0 16px; }
+      .topbar h1 { display: none; }
     }
   </style>
 </head>
@@ -163,10 +170,11 @@
 
   <header class="topbar">
     <div class="topbar-left">
-      <button class="btn-back" onclick="history.back()">
-        ← <span data-i18n="back">Retour</span>
-      </button>
-      <h1>Fiche Personne</h1>
+      <a href="javascript:history.back()" class="btn-back">
+        <svg width="7" height="12" viewBox="0 0 7 12" fill="none"><path d="M6 1L1 6l5 5" stroke="#0071e3" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span data-i18n="back">Retour</span>
+      </a>
+      <h1 id="topbarName">Fiche Personne</h1>
     </div>
     <div class="topbar-right">
       <div class="lang-switcher">
@@ -174,50 +182,52 @@
         <button class="lang-btn" onclick="setLang('en')">EN</button>
         <button class="lang-btn" onclick="setLang('es')">ES</button>
       </div>
+      <button class="btn-logout" id="logoutBtn" data-i18n="logout">Déconnexion</button>
     </div>
   </header>
 
   <main id="mainContent">
-    <div class="loading" id="loadingMsg" data-i18n="loading">Chargement...</div>
+    <div class="loading" id="loadingMsg">Chargement...</div>
   </main>
 
-  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
-  <script src="config.js"></script>
-
+  <script src="js/firebase-init.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/person.js"></script>
   <script>
     const i18n = {
       fr: {
-        back: "Retour", loading: "Chargement...", notFound: "Personne introuvable.",
-        edit: "Modifier", comment: "Ajouter un commentaire",
-        born: "Né(e) le", died: "Décédé(e) le", age: "Âge",
-        father: "Père", mother: "Mère", spouse: "Conjoint(e)", children: "Enfants",
-        notes: "Notes", comments: "Commentaires", noComments: "Aucun commentaire",
-        addComment: "Votre commentaire", send: "Envoyer"
+        back: "Retour", logout: "Déconnexion",
+        loading: "Chargement...", notFound: "Personne introuvable.",
+        edit: "Modifier", born: "Né(e) le", died: "Décédé(e) le",
+        unknownDates: "Dates inconnues",
+        sectionFamily: "Famille", father: "Père", mother: "Mère", spouse: "Conjoint(e)",
+        sectionChildren: "Enfants", noChildren: "Aucun enfant enregistré",
+        sectionNotes: "Notes & Biographie", noNotes: "Aucune note.",
+        nickname: "Surnom"
       },
       en: {
-        back: "Back", loading: "Loading...", notFound: "Person not found.",
-        edit: "Edit", comment: "Add comment",
-        born: "Born", died: "Died", age: "Age",
-        father: "Father", mother: "Mother", spouse: "Spouse", children: "Children",
-        notes: "Notes", comments: "Comments", noComments: "No comments",
-        addComment: "Your comment", send: "Send"
+        back: "Back", logout: "Sign out",
+        loading: "Loading...", notFound: "Person not found.",
+        edit: "Edit", born: "Born on", died: "Died on",
+        unknownDates: "Unknown dates",
+        sectionFamily: "Family", father: "Father", mother: "Mother", spouse: "Spouse",
+        sectionChildren: "Children", noChildren: "No children registered",
+        sectionNotes: "Notes & Biography", noNotes: "No notes.",
+        nickname: "Nickname"
       },
       es: {
-        back: "Atrás", loading: "Cargando...", notFound: "Persona no encontrada.",
-        edit: "Editar", comment: "Añadir comentario",
-        born: "Nacido", died: "Fallecido", age: "Edad",
-        father: "Padre", mother: "Madre", spouse: "Cónyuge", children: "Hijos",
-        notes: "Notas", comments: "Comentarios", noComments: "Sin comentarios",
-        addComment: "Su comentario", send: "Enviar"
+        back: "Volver", logout: "Cerrar sesión",
+        loading: "Cargando...", notFound: "Persona no encontrada.",
+        edit: "Modificar", born: "Nacido(a) el", died: "Fallecido(a) el",
+        unknownDates: "Fechas desconocidas",
+        sectionFamily: "Familia", father: "Padre", mother: "Madre", spouse: "Cónyuge",
+        sectionChildren: "Hijos", noChildren: "Sin hijos registrados",
+        sectionNotes: "Notas & Biografía", noNotes: "Sin notas.",
+        nickname: "Apodo"
       }
     };
 
     let currentLang = localStorage.getItem("lang") || "fr";
-    let currentPersonId = null;
-    let currentPerson = null;
-    let userRole = 'reader';
 
     function setLang(lang) {
       currentLang = lang;
@@ -238,191 +248,9 @@
 
     setLang(currentLang);
 
-    // Récupérer l'ID de l'URL
-    const params = new URLSearchParams(window.location.search);
-    currentPersonId = params.get('id');
-
-    firebase.auth().onAuthStateChanged(async (user) => {
-      if (!user) {
-        window.location.href = 'index.html';
-        return;
-      }
-
-      // Vérifier le rôle
-      try {
-        const doc = await db.collection('authorizedUsers').doc(user.email).get();
-        if (doc.exists) {
-          userRole = doc.data().role || 'reader';
-        }
-      } catch (err) {
-        userRole = 'reader';
-      }
-
-      // Charger la personne
-      if (!currentPersonId) {
-        document.getElementById('loadingMsg').textContent = i18n[currentLang].notFound;
-        return;
-      }
-
-      loadPerson();
+    document.getElementById("logoutBtn").addEventListener("click", function() {
+      firebase.auth().signOut().then(function() { window.location.href = "index.html"; });
     });
-
-    async function loadPerson() {
-      try {
-        const doc = await db.collection('persons').doc(currentPersonId).get();
-        if (!doc.exists) {
-          document.getElementById('loadingMsg').textContent = i18n[currentLang].notFound;
-          return;
-        }
-
-        currentPerson = doc.data();
-        currentPerson.id = doc.id;
-
-        renderPerson();
-        await loadComments();
-      } catch (err) {
-        document.getElementById('loadingMsg').textContent = 'Erreur: ' + err.message;
-      }
-    }
-
-    function renderPerson() {
-      const main = document.getElementById('mainContent');
-      const t = i18n[currentLang];
-
-      let html = `
-        <div class="person-hero">
-          <div class="avatar">👤</div>
-          <div class="person-info" style="flex:1;">
-            <h2>${currentPerson.firstName || ''} ${currentPerson.lastName || ''}</h2>
-            <div class="person-dates">
-              ${currentPerson.birthDate ? `${t.born}: ${currentPerson.birthDate}` : ''}
-              ${currentPerson.deathDate ? ` | ${t.died}: ${currentPerson.deathDate}` : ''}
-            </div>
-            <div>
-              ${userRole === 'admin' ? `<button class="btn-action btn-edit" onclick="editPerson()"><span data-i18n="edit">Modifier</span></button>` : ''}
-              <button class="btn-action btn-comment" onclick="toggleCommentForm()"><span data-i18n="comment">Ajouter un commentaire</span></button>
-            </div>
-          </div>
-        </div>
-      `;
-
-      if (currentPerson.notes) {
-        html += `
-          <div class="card">
-            <h3 data-i18n="notes">Notes</h3>
-            <p>${currentPerson.notes}</p>
-          </div>
-        `;
-      }
-
-      // Commentaires
-      html += `
-        <div class="card">
-          <h3 data-i18n="comments">Commentaires</h3>
-          <div id="commentsList"></div>
-          <div id="commentForm" style="display:none; margin-top:20px; padding-top:20px; border-top: 1px solid var(--border);">
-            <div class="form-group">
-              <label class="form-label" data-i18n="addComment">Votre commentaire</label>
-              <textarea id="commentText" rows="4" placeholder="Écrivez votre commentaire..."></textarea>
-            </div>
-            <button class="btn-submit" onclick="submitComment()"><span data-i18n="send">Envoyer</span></button>
-            <button class="btn-action" style="background:#e5e5e7; color:#1d1d1f; margin-left:8px;" onclick="toggleCommentForm()">Annuler</button>
-          </div>
-        </div>
-      `;
-
-      main.innerHTML = html;
-      applyTranslations();
-    }
-
-    async function loadComments() {
-      try {
-        const snapshot = await db.collection('comments')
-          .where('personId', '==', currentPersonId)
-          .orderBy('createdAt', 'desc')
-          .get();
-
-        const commentsList = document.getElementById('commentsList');
-        const t = i18n[currentLang];
-
-        if (snapshot.empty) {
-          commentsList.innerHTML = `<p class="empty" data-i18n="noComments">Aucun commentaire</p>`;
-          applyTranslations();
-          return;
-        }
-
-        let html = '<div class="comments-list">';
-        snapshot.forEach(doc => {
-          const comment = doc.data();
-          const date = new Date(comment.createdAt.toDate());
-          const dateStr = date.toLocaleString(currentLang === 'en' ? 'en-US' : 'fr-FR');
-
-          html += `
-            <div class="comment-item">
-              <div class="comment-author">${comment.userName}</div>
-              <div class="comment-date">${dateStr}</div>
-              <div class="comment-text">${comment.text}</div>
-            </div>
-          `;
-        });
-        html += '</div>';
-
-        commentsList.innerHTML = html;
-      } catch (err) {
-        console.error("Error loading comments:", err);
-      }
-    }
-
-    function toggleCommentForm() {
-      const form = document.getElementById('commentForm');
-      form.style.display = form.style.display === 'none' ? 'block' : 'none';
-    }
-
-    async function submitComment() {
-      const text = document.getElementById('commentText').value.trim();
-      if (!text) {
-        alert('Veuillez écrire un commentaire');
-        return;
-      }
-
-      const user = firebase.auth().currentUser;
-
-      try {
-        await db.collection('comments').add({
-          personId: currentPersonId,
-          userId: user.uid,
-          userName: user.email,
-          text: text,
-          createdAt: new Date()
-        });
-
-        // Incrémenter version
-        incrementVersion();
-
-        document.getElementById('commentText').value = '';
-        toggleCommentForm();
-        await loadComments();
-      } catch (err) {
-        alert('Erreur: ' + err.message);
-      }
-    }
-
-    function editPerson() {
-      if (userRole !== 'admin') {
-        alert('Seul un administrateur peut modifier');
-        return;
-      }
-      // TODO: Ouvrir modal d'édition
-      alert('Édition non disponible pour le moment');
-    }
-
-    function incrementVersion() {
-      let version = localStorage.getItem('appVersion') || 'v1.0.0';
-      let parts = version.substring(1).split('.');
-      parts[2] = (parseInt(parts[2]) + 1).toString();
-      version = 'v' + parts.join('.');
-      localStorage.setItem('appVersion', version);
-    }
   </script>
 
 </body>
