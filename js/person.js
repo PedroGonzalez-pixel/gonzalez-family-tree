@@ -107,6 +107,22 @@ async function loadPerson(id, isAdmin) {
     // Appliquer traductions sur le nouveau contenu
     if (window.applyTranslations) window.applyTranslations();
 
+    // **AJOUTER SECTION COMMENTAIRES**
+    const commentsHTML = `
+      <div class="info-card">
+        <h3>💬 Commentaires</h3>
+        <div id="commentsList" style="margin-bottom: 24px;"></div>
+        <div style="border-top: 1px solid #e0e0e5; padding-top: 20px;">
+          <textarea id="commentText" placeholder="Écrivez votre commentaire..." style="width: 100%; padding: 12px; border: 1px solid #d5d5d7; border-radius: 8px; font-family: 'DM Sans', sans-serif; font-size: 14px; resize: vertical; min-height: 80px;"></textarea>
+          <button onclick="submitComment('${id}')" style="margin-top: 12px; padding: 10px 20px; background: #0071e3; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600;">Envoyer</button>
+        </div>
+      </div>
+    `;
+    document.getElementById("mainContent").innerHTML += commentsHTML;
+
+    // Charger les commentaires
+    loadComments(id);
+
     // Charger les relations
     if (p.fatherId) await loadRelation("fatherSlot", p.fatherId);
     if (p.motherId) await loadRelation("motherSlot", p.motherId);
@@ -161,4 +177,78 @@ function formatDate(dateStr) {
   if (!dateStr) return "";
   const [y, m, d] = dateStr.split("-");
   return d + "/" + m + "/" + y;
+}
+
+// ========== COMMENTAIRES ==========
+
+async function loadComments(personId) {
+  try {
+    const snapshot = await db.collection('comments')
+      .where('personId', '==', personId)
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    const commentsList = document.getElementById('commentsList');
+    const currentLang = localStorage.getItem('lang') || 'fr';
+
+    if (snapshot.empty) {
+      commentsList.innerHTML = '<p style="color: #6e6e73; font-style: italic;">Aucun commentaire</p>';
+      return;
+    }
+
+    let html = '';
+    snapshot.forEach(doc => {
+      const comment = doc.data();
+      const date = new Date(comment.createdAt.toDate());
+      const dateStr = date.toLocaleString(currentLang === 'en' ? 'en-US' : currentLang === 'es' ? 'es-ES' : 'fr-FR');
+
+      html += `
+        <div style="background: #f9f9fb; border: 1px solid #e0e0e5; border-radius: 8px; padding: 16px; margin-bottom: 12px;">
+          <div style="font-weight: 600; font-size: 13px; color: #1d1d1f;">${comment.userName}</div>
+          <div style="font-size: 11px; color: #6e6e73; margin-top: 2px;">${dateStr}</div>
+          <div style="margin-top: 8px; font-size: 14px; color: #1d1d1f; line-height: 1.5;">${comment.text}</div>
+        </div>
+      `;
+    });
+
+    commentsList.innerHTML = html;
+  } catch (err) {
+    console.error("Error loading comments:", err);
+  }
+}
+
+async function submitComment(personId) {
+  const text = document.getElementById('commentText').value.trim();
+  if (!text) {
+    alert('Veuillez écrire un commentaire');
+    return;
+  }
+
+  const user = firebase.auth().currentUser;
+  if (!user) {
+    alert('Vous devez être connecté');
+    return;
+  }
+
+  try {
+    await db.collection('comments').add({
+      personId: personId,
+      userId: user.uid,
+      userName: user.email,
+      text: text,
+      createdAt: new Date()
+    });
+
+    // Incrémenter version
+    let version = localStorage.getItem('appVersion') || 'v1.0.0';
+    let parts = version.substring(1).split('.');
+    parts[2] = (parseInt(parts[2]) + 1).toString();
+    version = 'v' + parts.join('.');
+    localStorage.setItem('appVersion', version);
+
+    document.getElementById('commentText').value = '';
+    await loadComments(personId);
+  } catch (err) {
+    alert('Erreur: ' + err.message);
+  }
 }
