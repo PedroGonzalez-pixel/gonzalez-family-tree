@@ -390,7 +390,8 @@
     <div class="navbar">
         <div class="navbar-left">
             <h1>🌳 Gonzalez Family Tree</h1>
-            <span class="version">v1.0.0</span>
+            <span class="version" id="versionDisplay">v1.0.0</span>
+            <span style="font-size: 12px; color: #999;" id="userEmail"></span>
         </div>
         <div class="navbar-right">
             <div class="lang-switcher">
@@ -451,7 +452,7 @@
                 <h3 data-i18n="addUser">Ajouter un compte</h3>
                 <div class="form-group">
                     <input type="email" id="newEmail" placeholder="Email">
-                    <input type="text" id="newName" placeholder="Prénom">
+                    <input type="text" id="newName" placeholder="Nom">
                     <select id="newRole">
                         <option value="reader">Lecteur</option>
                         <option value="admin">Admin</option>
@@ -483,7 +484,7 @@
                         <input type="text" id="editEmail" disabled>
                     </div>
                     <div>
-                        <label style="display: block; font-size: 12px; margin-bottom: 8px; color: #666;" data-i18n="firstName">Prénom</label>
+                        <label style="display: block; font-size: 12px; margin-bottom: 8px; color: #666;" data-i18n="firstName">Nom</label>
                         <input type="text" id="editName">
                     </div>
                 </div>
@@ -574,6 +575,13 @@
                 return;
             }
 
+            // Afficher l'email de l'utilisateur
+            document.getElementById('userEmail').textContent = user.email;
+
+            // Auto-incrémenter la version
+            let version = localStorage.getItem('appVersion') || 'v1.0.0';
+            document.getElementById('versionDisplay').textContent = version;
+
             try {
                 const doc = await db.collection('authorizedUsers').doc(user.email).get();
                 if (doc.exists && doc.data().role === 'admin') {
@@ -584,6 +592,16 @@
                 console.error("Error checking admin:", err);
             }
         });
+
+        // Fonction pour incrémenter la version
+        function incrementVersion() {
+            let version = localStorage.getItem('appVersion') || 'v1.0.0';
+            let parts = version.substring(1).split('.');
+            parts[2] = (parseInt(parts[2]) + 1).toString();
+            version = 'v' + parts.join('.');
+            localStorage.setItem('appVersion', version);
+            document.getElementById('versionDisplay').textContent = version;
+        }
 
         function logOut() {
             firebase.auth().signOut().then(() => {
@@ -624,6 +642,10 @@
                                 <div class="account-email">${email}</div>
                                 <div class="account-name">${firstName}</div>
                             </div>
+                            <select class="account-role" onchange="updateRole('${email}', this.value)">
+                                <option value="reader" ${role === 'reader' ? 'selected' : ''}>Lecteur</option>
+                                <option value="admin" ${role === 'admin' ? 'selected' : ''}>Admin</option>
+                            </select>
                             <div class="account-actions">
                                 <button class="btn-sm btn-sm-primary" onclick="openEdit('${email}', '${firstName}', '${role}')">Modifier</button>
                                 <button class="btn-sm btn-sm-danger" onclick="deleteUser('${email}')">Supprimer</button>
@@ -635,6 +657,17 @@
                 list.innerHTML = html;
             } catch (err) {
                 list.innerHTML = `<div class="message error">Erreur: ${err.message}</div>`;
+            }
+        }
+
+        async function updateRole(email, newRole) {
+            try {
+                await db.collection('authorizedUsers').doc(email).update({ role: newRole });
+                showMessage('success', i18n[currentLang].success);
+                incrementVersion();
+            } catch (err) {
+                showMessage('error', 'Erreur: ' + err.message);
+                loadUsers();
             }
         }
 
@@ -654,6 +687,7 @@
                     role: role
                 });
                 showMessage('success', i18n[currentLang].success);
+                incrementVersion();
                 document.getElementById('newEmail').value = '';
                 document.getElementById('newName').value = '';
                 loadUsers();
@@ -690,6 +724,7 @@
                     role: role
                 });
                 showMessage('success', i18n[currentLang].success);
+                incrementVersion();
                 closeEdit();
                 loadUsers();
             } catch (err) {
@@ -703,6 +738,7 @@
             try {
                 await db.collection('authorizedUsers').doc(email).delete();
                 showMessage('success', i18n[currentLang].success);
+                incrementVersion();
                 loadUsers();
             } catch (err) {
                 showMessage('error', 'Erreur: ' + err.message);
