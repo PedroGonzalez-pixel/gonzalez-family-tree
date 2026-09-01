@@ -188,7 +188,8 @@
 
   <main id="mainContent">
     <div class="loading" id="loadingMsg">Chargement...</div>
-    <!-- COMMENTAIRES (ajouté dynamiquement) -->
+    
+    <!-- COMMENTAIRES -->
     <div id="commentsSection" style="display: block; margin-top: 40px;">
       <div class="info-card">
         <h3 data-i18n="comments">💬 Commentaires</h3>
@@ -204,6 +205,7 @@
   <script src="js/firebase-init.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/person.js"></script>
+  <script src="config.js"></script>
   <script>
     const i18n = {
       fr: {
@@ -215,7 +217,7 @@
         sectionChildren: "Enfants", noChildren: "Aucun enfant enregistré",
         sectionNotes: "Notes & Biographie", noNotes: "Aucune note.",
         nickname: "Surnom",
-        comments: "💬 Commentaires", noComments: "Aucun commentaire", addComment: "Ajouter un commentaire", send: "Envoyer"
+        comments: "💬 Commentaires", noComments: "Aucun commentaire", send: "Envoyer"
       },
       en: {
         back: "Back", logout: "Sign out",
@@ -226,7 +228,7 @@
         sectionChildren: "Children", noChildren: "No children registered",
         sectionNotes: "Notes & Biography", noNotes: "No notes.",
         nickname: "Nickname",
-        comments: "💬 Comments", noComments: "No comments", addComment: "Add comment", send: "Send"
+        comments: "💬 Comments", noComments: "No comments", send: "Send"
       },
       es: {
         back: "Volver", logout: "Cerrar sesión",
@@ -237,11 +239,12 @@
         sectionChildren: "Hijos", noChildren: "Sin hijos registrados",
         sectionNotes: "Notas & Biografía", noNotes: "Sin notas.",
         nickname: "Apodo",
-        comments: "💬 Comentarios", noComments: "Sin comentarios", addComment: "Añadir comentario", send: "Enviar"
+        comments: "💬 Comentarios", noComments: "Sin comentarios", send: "Enviar"
       }
     };
 
     let currentLang = localStorage.getItem("lang") || "fr";
+    let currentPersonId = null;
 
     function setLang(lang) {
       currentLang = lang;
@@ -267,14 +270,11 @@
     });
 
     // COMMENTAIRES
-    let currentPersonId = null;
-
-    // Récupérer l'ID de l'URL (person.html?id=ABC123)
     const params = new URLSearchParams(window.location.search);
     currentPersonId = params.get('id');
 
-    // Charger les commentaires quand person.js finit de charger
-    window.addEventListener('personLoaded', loadComments);
+    // Charger commentaires après 3 secondes (quand person.js a fini)
+    setTimeout(loadComments, 3000);
 
     async function loadComments() {
       if (!currentPersonId) return;
@@ -285,15 +285,11 @@
           .orderBy('createdAt', 'desc')
           .get();
 
-        const commentsSection = document.getElementById('commentsSection');
         const commentsList = document.getElementById('commentsList');
         const t = i18n[currentLang];
 
-        commentsSection.style.display = 'block';
-
         if (snapshot.empty) {
-          commentsList.innerHTML = `<p class="notes-empty" data-i18n="noComments">${t.noComments}</p>`;
-          applyTranslations();
+          commentsList.innerHTML = `<p class="notes-empty">${t.noComments}</p>`;
           return;
         }
 
