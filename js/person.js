@@ -1,260 +1,257 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Fiche Personne – Famille Gonzalez</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=Playfair+Display:wght@400;500&display=swap" rel="stylesheet">
-  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root {
-      --bg: #f5f5f7;
-      --surface: #ffffff;
-      --surface2: #f9f9fb;
-      --border: #e0e0e5;
-      --text: #1d1d1f;
-      --muted: #6e6e73;
-      --accent: #0071e3;
-      --accent-hover: #0077ed;
-      --danger: #ff3b30;
-      --radius: 12px;
-      --radius-sm: 8px;
-      --shadow: 0 2px 20px rgba(0,0,0,0.06);
-    }
-    body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+const urlParams = new URLSearchParams(window.location.search);
+const personId = urlParams.get("id");
 
-    /* TOPBAR */
-    .topbar {
-      position: sticky; top: 0; z-index: 100;
-      background: rgba(255,255,255,0.85);
-      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-      border-bottom: 1px solid var(--border);
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 0 32px; height: 56px;
-    }
-    .topbar-left { display: flex; align-items: center; gap: 12px; }
-    .topbar h1 { font-family: 'Playfair Display', serif; font-size: 17px; font-weight: 500; }
-    .btn-back {
-      display: flex; align-items: center; gap: 6px;
-      font-size: 14px; color: var(--accent); text-decoration: none;
-      padding: 6px 10px; border-radius: var(--radius-sm); transition: background 0.15s;
-    }
-    .btn-back:hover { background: rgba(0,113,227,0.08); }
-    .topbar-right { display: flex; align-items: center; gap: 12px; }
+if (!personId) window.location.href = "dashboard.html";
 
-    .lang-switcher {
-      display: flex; background: var(--bg);
-      border: 1px solid var(--border); border-radius: 20px; padding: 3px; gap: 2px;
-    }
-    .lang-btn {
-      border: none; background: transparent; padding: 4px 12px; border-radius: 16px;
-      font-size: 12px; font-weight: 500; cursor: pointer; color: var(--muted); transition: all 0.2s;
-    }
-    .lang-btn.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
-    .btn-logout {
-      border: 1px solid var(--border); background: transparent;
-      padding: 6px 14px; border-radius: 20px; font-size: 13px;
-      color: var(--muted); cursor: pointer; transition: all 0.15s;
-    }
-    .btn-logout:hover { background: var(--bg); color: var(--text); }
+async function checkAdmin(email) {
+  try {
+    const doc = await db.collection("authorizedUsers").doc(email).get();
+    if (!doc.exists) return false;
+    return doc.data().role === "admin";
+  } catch (e) { return false; }
+}
 
-    /* MAIN */
-    main { max-width: 680px; margin: 40px auto; padding: 0 20px 80px; }
+firebase.auth().onAuthStateChanged(async function(user) {
+  if (!user) return;
+  const isAdmin = await checkAdmin(user.email);
+  await loadPerson(personId, isAdmin);
+});
 
-    /* HERO */
-    .person-hero {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--radius); padding: 32px; margin-bottom: 16px;
-      box-shadow: var(--shadow);
-      display: flex; align-items: center; gap: 28px;
-    }
-    .avatar-large {
-      width: 100px; height: 100px; border-radius: 50%;
-      background: var(--bg); border: 2px solid var(--border);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 36px; flex-shrink: 0;
-      background-size: cover; background-position: center; overflow: hidden;
-    }
-    .person-identity { flex: 1; }
-    .person-identity h2 {
-      font-family: 'Playfair Display', serif;
-      font-size: 26px; font-weight: 500; line-height: 1.2; margin-bottom: 4px;
-    }
-    .person-nickname {
-      font-size: 14px; color: var(--muted); font-style: italic; margin-bottom: 8px;
-    }
-    .person-dates {
-      display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px;
-    }
-    .date-badge {
-      display: flex; align-items: center; gap: 6px;
-      font-size: 13px; color: var(--muted);
-      background: var(--bg); border: 1px solid var(--border);
-      padding: 5px 12px; border-radius: 20px;
-    }
-    .date-badge span { font-weight: 500; color: var(--text); }
-    .btn-edit {
-      display: inline-flex; align-items: center; gap: 6px;
-      background: var(--accent); color: white; border: none;
-      padding: 9px 20px; border-radius: 20px; font-size: 13px;
-      font-weight: 500; text-decoration: none; cursor: pointer;
-      transition: background 0.15s;
-    }
-    .btn-edit:hover { background: var(--accent-hover); }
-
-    /* CARDS */
-    .info-card {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--radius); padding: 24px; margin-bottom: 16px;
-      box-shadow: var(--shadow);
-    }
-    .info-card h3 {
-      font-size: 12px; font-weight: 500; text-transform: uppercase;
-      letter-spacing: 0.07em; color: var(--muted); margin-bottom: 20px;
+async function loadPerson(id, isAdmin) {
+  try {
+    const doc = await db.collection("persons").doc(id).get();
+    if (!doc.exists) {
+      document.getElementById("mainContent").innerHTML = "<div class='loading'>Personne introuvable.</div>";
+      return;
     }
 
-    /* RELATIONS */
-    .relation-grid {
-      display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
-    }
-    .relation-item { display: flex; flex-direction: column; gap: 4px; }
-    .relation-label { font-size: 12px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
-    .relation-link {
-      font-size: 15px; color: var(--accent); text-decoration: none;
-      font-weight: 500; transition: opacity 0.15s;
-    }
-    .relation-link:hover { opacity: 0.7; }
-    .relation-empty { font-size: 15px; color: var(--muted); }
+    const p = doc.data();
+    const t = window.i18n ? window.i18n[window.currentLang || "fr"] : {};
+    const fullName = (p.firstName || "") + " " + (p.lastName || "");
 
-    /* ENFANTS */
-    .children-grid {
-      display: flex; flex-wrap: wrap; gap: 10px;
-    }
-    .child-pill {
-      display: inline-flex; align-items: center; gap: 6px;
-      background: var(--bg); border: 1px solid var(--border);
-      padding: 7px 16px; border-radius: 20px;
-      font-size: 14px; color: var(--text); text-decoration: none;
-      transition: all 0.15s;
-    }
-    .child-pill:hover { background: var(--accent); color: white; border-color: var(--accent); }
+    // Topbar
+    document.getElementById("topbarName").textContent = fullName;
 
-    /* NOTES */
-    .notes-text {
-      font-size: 15px; line-height: 1.7; color: var(--text);
-      white-space: pre-wrap;
+    // Dates
+    let datesHTML = "";
+    if (p.birthDate) {
+      datesHTML += `<div class="date-badge">🕊 <span>${formatDate(p.birthDate)}</span></div>`;
     }
-    .notes-empty { font-size: 15px; color: var(--muted); font-style: italic; }
-
-    /* LOADING */
-    .loading {
-      display: flex; align-items: center; justify-content: center;
-      height: 200px; color: var(--muted); font-size: 15px;
+    if (p.deathDate) {
+      datesHTML += `<div class="date-badge">✝ <span>${formatDate(p.deathDate)}</span></div>`;
     }
 
-    @media (max-width: 600px) {
-      .person-hero { flex-direction: column; align-items: flex-start; }
-      .relation-grid { grid-template-columns: 1fr 1fr; }
-      main { margin: 24px auto; }
-      .topbar { padding: 0 16px; }
-      .topbar h1 { display: none; }
-    }
-  </style>
-</head>
-<body>
+    // Bouton modifier
+    const editBtn = isAdmin
+      ? `<a href="edit.html?id=${id}" class="btn-edit" data-i18n="edit">✏️ Modifier</a>`
+      : "";
 
-  <header class="topbar">
-    <div class="topbar-left">
-      <a href="javascript:history.back()" class="btn-back">
-        <svg width="7" height="12" viewBox="0 0 7 12" fill="none"><path d="M6 1L1 6l5 5" stroke="#0071e3" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span data-i18n="back">Retour</span>
-      </a>
-      <h1 id="topbarName">Fiche Personne</h1>
-    </div>
-    <div class="topbar-right">
-      <div class="lang-switcher">
-        <button class="lang-btn active" onclick="setLang('fr')">FR</button>
-        <button class="lang-btn" onclick="setLang('en')">EN</button>
-        <button class="lang-btn" onclick="setLang('es')">ES</button>
+    // Surnom
+    const nicknameHTML = p.nickname
+      ? `<p class="person-nickname">"${p.nickname}"</p>`
+      : "";
+
+    // Photo
+    const photoStyle = p.photoURL
+      ? `style="background-image:url('${p.photoURL}');background-size:cover;background-position:center;"`
+      : "";
+    const photoContent = p.photoURL ? "" : "👤";
+
+    // HTML principal
+    const html = `
+      <div class="person-hero">
+        <div class="avatar-large" ${photoStyle}>${photoContent}</div>
+        <div class="person-identity">
+          <h2>${fullName}</h2>
+          ${nicknameHTML}
+          <div class="person-dates">${datesHTML || `<span class="relation-empty">Dates inconnues</span>`}</div>
+          ${editBtn}
+        </div>
       </div>
-      <button class="btn-logout" id="logoutBtn" data-i18n="logout">Déconnexion</button>
-    </div>
-  </header>
 
-  <main id="mainContent">
-    <div class="loading" id="loadingMsg">Chargement...</div>
-  </main>
+      <div class="info-card" id="familyCard">
+        <h3 data-i18n="sectionFamily">Famille</h3>
+        <div class="relation-grid">
+          <div class="relation-item">
+            <span class="relation-label" data-i18n="father">Père</span>
+            <span class="relation-empty" id="fatherSlot">—</span>
+          </div>
+          <div class="relation-item">
+            <span class="relation-label" data-i18n="mother">Mère</span>
+            <span class="relation-empty" id="motherSlot">—</span>
+          </div>
+          <div class="relation-item">
+            <span class="relation-label" data-i18n="spouse">Conjoint(e)</span>
+            <span class="relation-empty" id="spouseSlot">—</span>
+          </div>
+        </div>
+      </div>
 
-  <script src="js/firebase-init.js"></script>
-  <script src="js/auth.js"></script>
-  <script src="config.js"></script>
-  <script src="js/person.js"></script>
-  <script>
-    const i18n = {
-      fr: {
-        back: "Retour", logout: "Déconnexion",
-        loading: "Chargement...", notFound: "Personne introuvable.",
-        edit: "Modifier", born: "Né(e) le", died: "Décédé(e) le",
-        unknownDates: "Dates inconnues",
-        sectionFamily: "Famille", father: "Père", mother: "Mère", spouse: "Conjoint(e)",
-        sectionChildren: "Enfants", noChildren: "Aucun enfant enregistré",
-        sectionNotes: "Notes & Biographie", noNotes: "Aucune note.",
-        nickname: "Surnom"
-      },
-      en: {
-        back: "Back", logout: "Sign out",
-        loading: "Loading...", notFound: "Person not found.",
-        edit: "Edit", born: "Born on", died: "Died on",
-        unknownDates: "Unknown dates",
-        sectionFamily: "Family", father: "Father", mother: "Mother", spouse: "Spouse",
-        sectionChildren: "Children", noChildren: "No children registered",
-        sectionNotes: "Notes & Biography", noNotes: "No notes.",
-        nickname: "Nickname",
-        comments: "Comments", noComments: "No comments", send: "Send"
-      },
-      es: {
-        back: "Volver", logout: "Cerrar sesión",
-        loading: "Cargando...", notFound: "Persona no encontrada.",
-        edit: "Modificar", born: "Nacido(a) el", died: "Fallecido(a) el",
-        unknownDates: "Fechas desconocidas",
-        sectionFamily: "Familia", father: "Padre", mother: "Madre", spouse: "Cónyuge",
-        sectionChildren: "Hijos", noChildren: "Sin hijos registrados",
-        sectionNotes: "Notas & Biografía", noNotes: "Sin notas.",
-        nickname: "Apodo",
-        comments: "Comentarios", noComments: "Sin comentarios", send: "Enviar"
-      }
-    };
+      <div class="info-card">
+        <h3 data-i18n="sectionChildren">Enfants</h3>
+        <div class="children-grid" id="childrenGrid">
+          <span class="notes-empty" data-i18n="noChildren">Aucun enfant enregistré</span>
+        </div>
+      </div>
 
-    let currentLang = localStorage.getItem("lang") || "fr";
+      <div class="info-card">
+        <h3 data-i18n="sectionNotes">Notes & Biographie</h3>
+        <p class="${p.notes ? 'notes-text' : 'notes-empty'}" id="notesText">
+          ${p.notes || "Aucune note."}
+        </p>
+      </div>
 
-    function setLang(lang) {
-      currentLang = lang;
-      localStorage.setItem("lang", lang);
-      document.querySelectorAll(".lang-btn").forEach(btn => {
-        btn.classList.toggle("active", btn.textContent === lang.toUpperCase());
-      });
-      applyTranslations();
-    }
+      <div class="info-card">
+        <h3 data-i18n="comments">💬 Commentaires</h3>
+        <div id="commentsList" style="margin-bottom: 24px;"></div>
+        <div style="border-top: 1px solid #e0e0e5; padding-top: 20px;">
+          <textarea id="commentText" placeholder="Écrivez votre commentaire..." style="width: 100%; padding: 12px; border: 1px solid #d5d5d7; border-radius: 8px; font-family: 'DM Sans', sans-serif; font-size: 14px; resize: vertical; min-height: 80px;"></textarea>
+          <button onclick="submitComment('${id}')" style="margin-top: 12px; padding: 10px 20px; background: #0071e3; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600;" data-i18n="send">Envoyer</button>
+        </div>
+      </div>
+    `;
 
-    function applyTranslations() {
-      const t = i18n[currentLang];
-      document.querySelectorAll("[data-i18n]").forEach(el => {
-        const key = el.getAttribute("data-i18n");
-        if (t[key]) el.textContent = t[key];
-      });
-    }
+    document.getElementById("mainContent").innerHTML = html;
 
-    setLang(currentLang);
+    // Appliquer traductions sur le nouveau contenu
+    if (window.applyTranslations) window.applyTranslations();
 
-    document.getElementById("logoutBtn").addEventListener("click", function() {
-      firebase.auth().signOut().then(function() { window.location.href = "index.html"; });
+    // Charger les commentaires
+    loadComments(id);
+
+    // Charger les relations
+    if (p.fatherId) await loadRelation("fatherSlot", p.fatherId);
+    if (p.motherId) await loadRelation("motherSlot", p.motherId);
+    if (p.spouseId) await loadRelation("spouseSlot", p.spouseId);
+    await loadChildren(id);
+
+  } catch (err) {
+    console.error("Erreur :", err.message);
+    document.getElementById("mainContent").innerHTML = "<div class='loading'>Erreur de chargement.</div>";
+  }
+}
+
+async function loadRelation(slotId, relatedId) {
+  try {
+    const doc = await db.collection("persons").doc(relatedId).get();
+    if (!doc.exists) return;
+    const p = doc.data();
+    const slot = document.getElementById(slotId);
+    if (!slot) return;
+    slot.outerHTML = `<a href="person.html?id=${relatedId}" class="relation-link">${p.firstName} ${p.lastName}</a>`;
+  } catch (e) {}
+}
+
+async function loadChildren(parentId) {
+  try {
+    const [s1, s2] = await Promise.all([
+      db.collection("persons").where("fatherId", "==", parentId).get(),
+      db.collection("persons").where("motherId", "==", parentId).get()
+    ]);
+
+    const children = {};
+    s1.forEach(doc => children[doc.id] = doc.data());
+    s2.forEach(doc => children[doc.id] = doc.data());
+
+    const grid = document.getElementById("childrenGrid");
+    const ids = Object.keys(children);
+    if (ids.length === 0) return;
+
+    grid.innerHTML = "";
+    ids.forEach(id => {
+      const p = children[id];
+      const pill = document.createElement("a");
+      pill.href = "person.html?id=" + id;
+      pill.className = "child-pill";
+      pill.textContent = p.firstName + " " + p.lastName;
+      grid.appendChild(pill);
     });
-  </script>
+  } catch (e) {}
+}
 
-</body>
-</html>
+function formatDate(dateStr) {
+  if (!dateStr) return "";
+  const [y, m, d] = dateStr.split("-");
+  return d + "/" + m + "/" + y;
+}
+
+// ========== COMMENTAIRES ==========
+
+async function loadComments(personId) {
+  if (!personId) return;
+  
+  try {
+    const snapshot = await db.collection('comments')
+      .where('personId', '==', personId)
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    const commentsList = document.getElementById('commentsList');
+    if (!commentsList) return;
+
+    const currentLang = localStorage.getItem('lang') || 'fr';
+    const t = window.i18n ? window.i18n[currentLang] : {};
+
+    if (snapshot.empty) {
+      commentsList.innerHTML = `<p style="color: #6e6e73; font-style: italic;" data-i18n="noComments">${t.noComments || 'Aucun commentaire'}</p>`;
+      return;
+    }
+
+    let html = '';
+    snapshot.forEach(doc => {
+      const comment = doc.data();
+      const date = new Date(comment.createdAt.toDate());
+      const dateStr = date.toLocaleString(currentLang === 'en' ? 'en-US' : currentLang === 'es' ? 'es-ES' : 'fr-FR');
+
+      html += `
+        <div style="background: #f9f9fb; border: 1px solid #e0e0e5; border-radius: 8px; padding: 16px; margin-bottom: 12px;">
+          <div style="font-weight: 600; font-size: 13px; color: #1d1d1f;">${comment.userName}</div>
+          <div style="font-size: 11px; color: #6e6e73; margin-top: 2px;">${dateStr}</div>
+          <div style="margin-top: 8px; font-size: 14px; color: #1d1d1f; line-height: 1.5; white-space: pre-wrap;">${comment.text}</div>
+        </div>
+      `;
+    });
+
+    commentsList.innerHTML = html;
+  } catch (err) {
+    console.error("Error loading comments:", err);
+  }
+}
+
+async function submitComment(personId) {
+  const text = document.getElementById('commentText').value.trim();
+  if (!text) {
+    alert('Veuillez écrire un commentaire');
+    return;
+  }
+
+  const user = firebase.auth().currentUser;
+  if (!user) {
+    alert('Vous devez être connecté');
+    return;
+  }
+
+  try {
+    await db.collection('comments').add({
+      personId: personId,
+      userId: user.uid,
+      userName: user.email,
+      text: text,
+      createdAt: new Date()
+    });
+
+    // Incrémenter version
+    let version = localStorage.getItem('appVersion') || 'v1.0.0';
+    let parts = version.substring(1).split('.');
+    parts[2] = (parseInt(parts[2]) + 1).toString();
+    version = 'v' + parts.join('.');
+    localStorage.setItem('appVersion', version);
+
+    document.getElementById('commentText').value = '';
+    
+    // Attendre un peu que Firestore écrive
+    setTimeout(() => loadComments(personId), 500);
+  } catch (err) {
+    alert('Erreur: ' + err.message);
+  }
+}
