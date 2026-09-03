@@ -110,15 +110,18 @@ async function loadPerson(id, isAdmin) {
     // **AJOUTER SECTION COMMENTAIRES**
     const commentsHTML = `
       <div class="info-card">
-        <h3>💬 Commentaires</h3>
+        <h3 data-i18n="comments">💬 Commentaires</h3>
         <div id="commentsList" style="margin-bottom: 24px;"></div>
         <div style="border-top: 1px solid #e0e0e5; padding-top: 20px;">
           <textarea id="commentText" placeholder="Écrivez votre commentaire..." style="width: 100%; padding: 12px; border: 1px solid #d5d5d7; border-radius: 8px; font-family: 'DM Sans', sans-serif; font-size: 14px; resize: vertical; min-height: 80px;"></textarea>
-          <button onclick="submitComment('${id}')" style="margin-top: 12px; padding: 10px 20px; background: #0071e3; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600;">Envoyer</button>
+          <button onclick="submitComment('${id}')" style="margin-top: 12px; padding: 10px 20px; background: #0071e3; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600;" data-i18n="send">Envoyer</button>
         </div>
       </div>
     `;
     document.getElementById("mainContent").innerHTML += commentsHTML;
+
+    // Appliquer traductions sur commentaires
+    if (window.applyTranslations) window.applyTranslations();
 
     // Charger les commentaires
     loadComments(id);
@@ -182,6 +185,8 @@ function formatDate(dateStr) {
 // ========== COMMENTAIRES ==========
 
 async function loadComments(personId) {
+  if (!personId) return;
+  
   try {
     const snapshot = await db.collection('comments')
       .where('personId', '==', personId)
@@ -189,10 +194,13 @@ async function loadComments(personId) {
       .get();
 
     const commentsList = document.getElementById('commentsList');
+    if (!commentsList) return;
+
     const currentLang = localStorage.getItem('lang') || 'fr';
+    const t = window.i18n ? window.i18n[currentLang] : {};
 
     if (snapshot.empty) {
-      commentsList.innerHTML = '<p style="color: #6e6e73; font-style: italic;">Aucun commentaire</p>';
+      commentsList.innerHTML = `<p style="color: #6e6e73; font-style: italic;" data-i18n="noComments">${t.noComments || 'Aucun commentaire'}</p>`;
       return;
     }
 
@@ -206,7 +214,7 @@ async function loadComments(personId) {
         <div style="background: #f9f9fb; border: 1px solid #e0e0e5; border-radius: 8px; padding: 16px; margin-bottom: 12px;">
           <div style="font-weight: 600; font-size: 13px; color: #1d1d1f;">${comment.userName}</div>
           <div style="font-size: 11px; color: #6e6e73; margin-top: 2px;">${dateStr}</div>
-          <div style="margin-top: 8px; font-size: 14px; color: #1d1d1f; line-height: 1.5;">${comment.text}</div>
+          <div style="margin-top: 8px; font-size: 14px; color: #1d1d1f; line-height: 1.5; white-space: pre-wrap;">${comment.text}</div>
         </div>
       `;
     });
@@ -247,7 +255,9 @@ async function submitComment(personId) {
     localStorage.setItem('appVersion', version);
 
     document.getElementById('commentText').value = '';
-    await loadComments(personId);
+    
+    // Attendre un peu que Firestore écrive
+    setTimeout(() => loadComments(personId), 500);
   } catch (err) {
     alert('Erreur: ' + err.message);
   }
